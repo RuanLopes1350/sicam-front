@@ -53,8 +53,39 @@ export type ExportMetadataResponse =
 export type IntegrityVerifyResponse =
 	paths['/api/v1/integrity/verify']['post']['responses'][200]['content']['application/json'];
 
+export type IntegrityMatchedArtifact = NonNullable<IntegrityVerifyResponse['matchedArtifact']>;
+export type IntegrityVerifiedRecord = NonNullable<IntegrityVerifyResponse['record']>;
+
 export type AuditLogsResponse =
 	paths['/api/v1/audit-logs']['get']['responses'][200]['content']['application/json'];
+
+export type AuditLogsQuery = NonNullable<
+	paths['/api/v1/audit-logs']['get']['parameters']['query']
+>;
+
+export type AuditLogItem = AuditLogsResponse['items'][number];
+export type AuditAction = AuditLogItem['action'];
+
+export type UsersListResponse =
+	paths['/api/v1/users']['get']['responses'][200]['content']['application/json'];
+
+export type UserAccountItem = UsersListResponse['items'][number];
+
+export type UsersListQuery = NonNullable<
+	paths['/api/v1/users']['get']['parameters']['query']
+>;
+
+export type CreateUserBody =
+	paths['/api/v1/users']['post']['requestBody']['content']['application/json'];
+
+export type CreateUserResponse =
+	paths['/api/v1/users']['post']['responses'][201]['content']['application/json'];
+
+export type UpdateUserBody =
+	paths['/api/v1/users/{userId}']['patch']['requestBody']['content']['application/json'];
+
+export type UpdateUserResponse =
+	paths['/api/v1/users/{userId}']['patch']['responses'][200]['content']['application/json'];
 
 export type SseSnapshotEvent = components['schemas']['SseSnapshotEvent'];
 export type SseProgressEvent = components['schemas']['SseProgressEvent'];
