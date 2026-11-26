@@ -1,5 +1,6 @@
 import createClient, { type Client } from 'openapi-fetch';
 import { clientEnv } from '@/config/env';
+import type { AuthenticatedOperator } from '@/types/api';
 import type { paths } from '@/types/generated/openapi';
 import { parseProblemResponse } from './problemDetails';
 import {
@@ -7,6 +8,7 @@ import {
 	getAccessToken,
 	notifySessionExpired,
 	setAccessToken,
+	setAuthSession,
 } from './tokenStore';
 
 export type SicamApiClient = Client<paths>;
@@ -59,6 +61,7 @@ export async function refreshSessionSingleFlight(
 			const payload = (await response.json()) as {
 				accessToken?: string;
 				expiresInSeconds?: number;
+				user?: AuthenticatedOperator;
 			};
 
 			if (typeof payload?.accessToken !== 'string' || !payload.accessToken) {
@@ -67,7 +70,20 @@ export async function refreshSessionSingleFlight(
 				return null;
 			}
 
-			setAccessToken(payload.accessToken, payload.expiresInSeconds);
+			if (
+				payload.user &&
+				typeof payload.user === 'object' &&
+				typeof payload.user.id === 'string' &&
+				typeof payload.user.role === 'string'
+			) {
+				setAuthSession({
+					accessToken: payload.accessToken,
+					expiresInSeconds: payload.expiresInSeconds,
+					user: payload.user,
+				});
+			} else {
+				setAccessToken(payload.accessToken, payload.expiresInSeconds);
+			}
 			return payload.accessToken;
 		} catch {
 			return null;

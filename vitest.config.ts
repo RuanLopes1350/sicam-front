@@ -5,6 +5,9 @@ import { defineConfig } from 'vitest/config';
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+	esbuild: {
+		jsx: 'automatic',
+	},
 	resolve: {
 		alias: {
 			'@': path.resolve(rootDir, 'src'),
@@ -13,7 +16,7 @@ export default defineConfig({
 	test: {
 		environment: 'node',
 		globals: false,
-		include: ['tests/**/*.test.ts'],
+		include: ['tests/**/*.test.{ts,tsx}'],
 		testTimeout: 15000,
 	},
 });
