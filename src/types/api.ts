@@ -26,10 +26,43 @@ export type AuthMeResponse =
 export type CasesListResponse =
 	paths['/api/v1/cases']['get']['responses'][200]['content']['application/json'];
 
+export type CasesListQuery = NonNullable<paths['/api/v1/cases']['get']['parameters']['query']>;
+export type CaseStatusFilter = NonNullable<CasesListQuery['status']>;
+
 export type CaseListItem = CasesListResponse['items'][number];
 
 export type CaseDetailResponse =
 	paths['/api/v1/cases/{caseId}']['get']['responses'][200]['content']['application/json'];
+
+export type CaseRunSummaryItem = CaseDetailResponse['runs'][number];
+
+export type CreateCaseBody =
+	paths['/api/v1/cases']['post']['requestBody']['content']['application/json'];
+
+export type CreateCaseResponse =
+	paths['/api/v1/cases']['post']['responses'][201]['content']['application/json'];
+
+export type AoiPolygonGeoJson = CreateCaseBody['aoiGeoJson'];
+
+export type UpdateCaseBody =
+	paths['/api/v1/cases/{caseId}']['patch']['requestBody']['content']['application/json'];
+
+export type UpdateCaseResponse =
+	paths['/api/v1/cases/{caseId}']['patch']['responses'][200]['content']['application/json'];
+
+export type TerritoryStatesResponse =
+	paths['/api/v1/territories/states']['get']['responses'][200]['content']['application/json'];
+
+export type TerritoryStateItem = TerritoryStatesResponse['items'][number];
+
+export type TerritoryMunicipalitiesQuery = NonNullable<
+	paths['/api/v1/territories/municipalities']['get']['parameters']['query']
+>;
+
+export type TerritoryMunicipalitiesResponse =
+	paths['/api/v1/territories/municipalities']['get']['responses'][200]['content']['application/json'];
+
+export type TerritoryMunicipalityItem = TerritoryMunicipalitiesResponse['items'][number];
 
 export type RunDetailResponse =
 	paths['/api/v1/runs/{runId}']['get']['responses'][200]['content']['application/json'];
