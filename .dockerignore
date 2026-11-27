@@ -6,6 +6,10 @@ coverage
 .env.*
 !.env.example
 tests
+docs
+README.md
+Dockerfile
+docker-compose.yml
 *.tsbuildinfo
 next-env.d.ts
 npm-debug.log*
