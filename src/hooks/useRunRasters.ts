@@ -47,6 +47,7 @@ export function useRunRasters(
 					assetsRef.current.map(async (asset) => {
 						const blob = await fetchRunRasterBlob(runId, asset.assetType, {
 							signal: controller.signal,
+							upscale: asset.assetType === 'delta_ndvi_mask' ? 1 : 4,
 						});
 						const objectUrl = URL.createObjectURL(blob);
 						createdUrls.push(objectUrl);

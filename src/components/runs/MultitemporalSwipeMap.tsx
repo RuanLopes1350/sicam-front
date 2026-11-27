@@ -68,6 +68,7 @@ function syncImageRasterLayer(
 	visible: boolean,
 	opacity: number,
 	beforeLayerId?: string,
+	resampling: 'linear' | 'nearest' = 'linear',
 ) {
 	if (!asset) {
 		if (map.getLayer(layerId)) {
@@ -95,6 +96,7 @@ function syncImageRasterLayer(
 				paint: {
 					'raster-fade-duration': 0,
 					'raster-opacity': opacity,
+					'raster-resampling': resampling,
 				},
 			},
 			beforeLayerId && map.getLayer(beforeLayerId) ? beforeLayerId : undefined,
@@ -104,24 +106,32 @@ function syncImageRasterLayer(
 	if (map.getLayer(layerId)) {
 		map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none');
 		map.setPaintProperty(layerId, 'raster-opacity', opacity);
+		map.setPaintProperty(layerId, 'raster-resampling', resampling);
 	}
 }
 
 function syncMapLayers(
 	map: MapLibreMapInstance,
 	params: {
+		ready: boolean;
 		sceneRaster: LoadedRasterAsset | undefined;
 		maskRaster: LoadedRasterAsset | undefined;
 		showMask: boolean;
 		maskOpacity: number;
 		showVectors: boolean;
+		sceneResampling: 'linear' | 'nearest';
 		aoiCollection: FeatureCollection;
 		featuresCollection: FeatureCollection;
 	},
 ) {
-	if (!map.isStyleLoaded()) {
+	// Não depende de map.isStyleLoaded() (que retorna false se algum tile externo falhar)
+	if (!params.ready) {
 		return;
 	}
+	try {
+		if (!map.getStyle()) {
+			return;
+		}
 
 	if (!map.getSource(AOI_SOURCE_ID)) {
 		map.addSource(AOI_SOURCE_ID, {
@@ -225,6 +235,7 @@ function syncMapLayers(
 		true,
 		1,
 		AOI_LINE_LAYER_ID,
+		params.sceneResampling,
 	);
 	syncImageRasterLayer(
 		map,
@@ -234,7 +245,11 @@ function syncMapLayers(
 		params.showMask,
 		params.maskOpacity,
 		AOI_LINE_LAYER_ID,
+		'nearest',
 	);
+	} catch {
+		// Estilo ainda em transição durante troca de mapa-base
+	}
 }
 
 export function MultitemporalSwipeMap({
@@ -254,14 +269,19 @@ export function MultitemporalSwipeMap({
 	const containerT1Ref = useRef<HTMLDivElement | null>(null);
 	const mapT0Ref = useRef<MapLibreMapInstance | null>(null);
 	const mapT1Ref = useRef<MapLibreMapInstance | null>(null);
+	const styleReadyT0Ref = useRef(false);
+	const styleReadyT1Ref = useRef(false);
+	const prevBasemapRef = useRef<BasemapVariant>('satellite');
 	const isSyncingRef = useRef(false);
 	const hasFittedInitialRef = useRef(false);
 
 	const [basemap, setBasemap] = useState<BasemapVariant>('satellite');
 	const [spectralMode, setSpectralMode] = useState<SpectralCompositionMode>('rgb');
-	const [showMask, setShowMask] = useState(true);
+	const [showMask, setShowMask] = useState(false);
 	const [maskOpacity, setMaskOpacity] = useState(0.55);
 	const [showVectors, setShowVectors] = useState(true);
+	const [rasterResampling, setRasterResampling] = useState<'linear' | 'nearest'>('linear');
+	const [isOverZoomed, setIsOverZoomed] = useState(false);
 	const [swipePct, setSwipePct] = useState(50);
 	const [isDraggingSwipe, setIsDraggingSwipe] = useState(false);
 	const [webglUnavailable, setWebglUnavailable] = useState(false);
@@ -311,22 +331,26 @@ export function MultitemporalSwipeMap({
 	syncBothRef.current = () => {
 		if (mapT0Ref.current) {
 			syncMapLayers(mapT0Ref.current, {
+				ready: styleReadyT0Ref.current,
 				sceneRaster: rasterT0,
-				maskRaster,
-				showMask,
+				maskRaster: undefined,
+				showMask: false,
 				maskOpacity,
 				showVectors,
+				sceneResampling: rasterResampling,
 				aoiCollection,
 				featuresCollection,
 			});
 		}
 		if (mapT1Ref.current) {
 			syncMapLayers(mapT1Ref.current, {
+				ready: styleReadyT1Ref.current,
 				sceneRaster: rasterT1,
 				maskRaster,
 				showMask,
 				maskOpacity,
 				showVectors,
+				sceneResampling: rasterResampling,
 				aoiCollection,
 				featuresCollection,
 			});
@@ -398,8 +422,21 @@ export function MultitemporalSwipeMap({
 				instT1.addControl(new NavigationControl({ showCompass: false }), 'top-right');
 				instT1.addControl(new ScaleControl({ maxWidth: 110, unit: 'metric' }), 'bottom-right');
 
-				instT0.on('style.load', () => syncBothRef.current());
-				instT1.on('style.load', () => syncBothRef.current());
+				const markReadyT0 = () => {
+					styleReadyT0Ref.current = true;
+					syncBothRef.current();
+				};
+				const markReadyT1 = () => {
+					styleReadyT1Ref.current = true;
+					syncBothRef.current();
+				};
+
+				instT0.on('style.load', markReadyT0);
+				instT0.on('load', markReadyT0);
+				instT0.on('styledata', markReadyT0);
+				instT1.on('style.load', markReadyT1);
+				instT1.on('load', markReadyT1);
+				instT1.on('styledata', markReadyT1);
 
 				instT0.on('move', () => {
 					if (instT0 && instT1) mirrorCamera(instT0, instT1);
@@ -407,12 +444,19 @@ export function MultitemporalSwipeMap({
 				instT1.on('move', () => {
 					if (instT0 && instT1) mirrorCamera(instT1, instT0);
 				});
+				instT1.on('zoom', () => {
+					if (!instT1) return;
+					const nextOverZoom = instT1.getZoom() > 15.2;
+					setIsOverZoomed((prev) => (prev === nextOverZoom ? prev : nextOverZoom));
+				});
 
 				bindFeatureInteractions(instT0);
 				bindFeatureInteractions(instT1);
 
 				mapT0Ref.current = instT0;
 				mapT1Ref.current = instT1;
+				markReadyT0();
+				markReadyT1();
 			} catch {
 				if (!disposed) {
 					setWebglUnavailable(true);
@@ -422,6 +466,8 @@ export function MultitemporalSwipeMap({
 
 		return () => {
 			disposed = true;
+			styleReadyT0Ref.current = false;
+			styleReadyT1Ref.current = false;
 			instT0?.remove();
 			instT1?.remove();
 			mapT0Ref.current = null;
@@ -430,9 +476,19 @@ export function MultitemporalSwipeMap({
 	}, []);
 
 	useEffect(() => {
+		if (prevBasemapRef.current === basemap) {
+			return;
+		}
+		prevBasemapRef.current = basemap;
 		const style = buildBasemapStyle(basemap);
-		mapT0Ref.current?.setStyle(style);
-		mapT1Ref.current?.setStyle(style);
+		if (mapT0Ref.current) {
+			styleReadyT0Ref.current = false;
+			mapT0Ref.current.setStyle(style);
+		}
+		if (mapT1Ref.current) {
+			styleReadyT1Ref.current = false;
+			mapT1Ref.current.setStyle(style);
+		}
 	}, [basemap]);
 
 	useEffect(() => {
@@ -440,14 +496,14 @@ export function MultitemporalSwipeMap({
 	});
 
 	const fitMapsToBounds = useCallback(
-		(bounds: [number, number, number, number], duration = 500) => {
+		(bounds: [number, number, number, number], duration = 500, maxZoom = 14.2) => {
 			const [minLon, minLat, maxLon, maxLat] = bounds;
 			const target: [[number, number], [number, number]] = [
 				[minLon, minLat],
 				[maxLon, maxLat],
 			];
-			mapT1Ref.current?.fitBounds(target, { padding: 56, maxZoom: 16, duration });
-			mapT0Ref.current?.fitBounds(target, { padding: 56, maxZoom: 16, duration });
+			mapT1Ref.current?.fitBounds(target, { padding: 56, maxZoom, duration });
+			mapT0Ref.current?.fitBounds(target, { padding: 56, maxZoom, duration });
 		},
 		[],
 	);
@@ -461,7 +517,7 @@ export function MultitemporalSwipeMap({
 
 	useEffect(() => {
 		if (focusTargetBounds && focusSequence > 0) {
-			fitMapsToBounds(focusTargetBounds, 550);
+			fitMapsToBounds(focusTargetBounds, 550, 15.2);
 		}
 	}, [focusTargetBounds, focusSequence, fitMapsToBounds]);
 
@@ -573,6 +629,37 @@ export function MultitemporalSwipeMap({
 							<span>Polígonos Vetorizados</span>
 						</label>
 
+						<div
+							role="group"
+							aria-label="Modo de exibição do pixel Sentinel-2"
+							className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white"
+						>
+							<button
+								type="button"
+								onClick={() => setRasterResampling('linear')}
+								className={cn(
+									'px-2 py-1 text-[11px] font-medium transition-colors',
+									rasterResampling === 'linear'
+										? 'bg-brand-600 text-white'
+										: 'text-slate-600 hover:bg-slate-100',
+								)}
+							>
+								Super-Resolução 4×
+							</button>
+							<button
+								type="button"
+								onClick={() => setRasterResampling('nearest')}
+								className={cn(
+									'border-l border-slate-300 px-2 py-1 text-[11px] font-medium transition-colors',
+									rasterResampling === 'nearest'
+										? 'bg-brand-600 text-white'
+										: 'text-slate-600 hover:bg-slate-100',
+								)}
+							>
+								Pixel Nativo 10m
+							</button>
+						</div>
+
 						{defaultBounds ? (
 							<Button
 								size="sm"
@@ -652,7 +739,33 @@ export function MultitemporalSwipeMap({
 							T1 Alvo · {formatDateTimePtBr(t1AcquiredAt).slice(0, 10)}
 						</Badge>
 					</div>
+
+					{/* Selo técnico da resolução nativa Sentinel-2 */}
+					<div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2">
+						<Badge
+							variant="neutral"
+							className="border-slate-700 bg-slate-950/85 text-[11px] font-medium text-slate-100"
+						>
+							{rasterResampling === 'linear'
+								? 'Sentinel-2 L2A · 10 m/px (Super-resolução 4×)'
+								: 'Sentinel-2 L2A · 10 m/px (Pixel Nativo)'}
+						</Badge>
+					</div>
 				</div>
+
+				{isOverZoomed ? (
+					<div className="border-t border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-900">
+						Zoom acima do detalhamento físico do Sentinel-2 (10 m/px). Reduza o zoom ou clique em{' '}
+						<button
+							type="button"
+							onClick={() => defaultBounds && fitMapsToBounds(defaultBounds, 450)}
+							className="font-semibold underline hover:text-amber-700"
+						>
+							Enquadrar AOI
+						</button>{' '}
+						para nitidez ideal.
+					</div>
+				) : null}
 
 				<div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
 					<div className="flex flex-1 items-center gap-3">

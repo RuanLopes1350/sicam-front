@@ -140,7 +140,7 @@ export async function reviewRunFeature(
 export async function fetchRunRasterBlob(
 	runId: string,
 	assetType: RunRasterAssetType,
-	options?: CreateSicamApiClientOptions & { signal?: AbortSignal },
+	options?: CreateSicamApiClientOptions & { signal?: AbortSignal; upscale?: 1 | 2 | 4 },
 ): Promise<Blob> {
 	if (!isValidUuid(runId) || !ALLOWED_RASTER_TYPES.has(assetType)) {
 		throw new ApiProblemError({
@@ -159,7 +159,10 @@ export async function fetchRunRasterBlob(
 	const fetchImpl =
 		options?.fetchImpl ?? ((input: Request) => globalThis.fetch.call(globalThis, input));
 	const correlationId = generateRequestId();
-	const url = `${baseUrl}/api/v1/runs/${runId.trim()}/rasters/${assetType}`;
+	const safeUpscale =
+		options?.upscale && options.upscale > 1 ? Math.min(4, Math.round(options.upscale)) : 1;
+	const querySuffix = safeUpscale > 1 ? `?upscale=${safeUpscale}` : '';
+	const url = `${baseUrl}/api/v1/runs/${runId.trim()}/rasters/${assetType}${querySuffix}`;
 
 	const send = (bearerToken: string | null): Promise<Response> => {
 		const headers = new Headers();

@@ -3470,7 +3470,9 @@ export interface paths {
         /** Proxy autenticado em streaming da evidência PNG lossless armazenada no bucket S3 privado */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    upscale?: number;
+                };
                 header?: never;
                 path: {
                     runId: string;

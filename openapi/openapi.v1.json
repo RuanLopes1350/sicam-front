@@ -9310,6 +9310,17 @@
         "parameters": [
           {
             "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "default": 1
+            },
+            "in": "query",
+            "name": "upscale",
+            "required": false
+          },
+          {
+            "schema": {
               "type": "string",
               "format": "uuid"
             },

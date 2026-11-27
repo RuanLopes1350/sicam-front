@@ -339,6 +339,16 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 		expect(refreshCalls).toBe(1);
 		expect(rasterCalls).toBe(2);
 		expect(pngBlob.size).toBe(4);
+
+		const pngUpscaledBlob = await fetchRunRasterBlob(RUN_ID, 't0_rgb', {
+			baseUrl: 'https://api.sicam.test',
+			fetchImpl: mockFetch,
+			upscale: 4,
+		});
+		expect(rasterCalls).toBe(3);
+		expect(pngUpscaledBlob.size).toBe(4);
+		const lastRasterCall = mockFetch.mock.calls.at(-1)?.[0] as Request;
+		expect(lastRasterCall.url).toBe(`https://api.sicam.test/api/v1/runs/${RUN_ID}/rasters/t0_rgb?upscale=4`);
 	});
 
 	it('deve renderizar MultitemporalSwipeMap, FeaturesCurationTable e DismissFeatureModal em SSR sem erros', () => {
@@ -360,6 +370,9 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 		expect(swipeHtml).toContain('Falsa-Cor Infravermelho (NIR)');
 		expect(swipeHtml).toContain('Máscara ΔNDVI + SCL');
 		expect(swipeHtml).toContain('Posição da cortina comparativa T0 versus T1');
+		expect(swipeHtml).toContain('Super-Resolução 4×');
+		expect(swipeHtml).toContain('Pixel Nativo 10m');
+		expect(swipeHtml).toContain('Sentinel-2 L2A · 10 m/px (Super-resolução 4×)');
 
 		const tableWritableHtml = renderToStaticMarkup(
 			<FeaturesCurationTable
