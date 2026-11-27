@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CalendarClock, Edit3, Layers, MapPin } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Edit3, Layers, MapPin, Satellite } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -125,10 +125,19 @@ function CaseDetailContent() {
 				</div>
 
 				{isAnalyst ? (
-					<Button variant="outline" size="sm" onClick={() => setEditModalOpen(true)}>
-						<Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-						Editar Metadados
-					</Button>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button variant="outline" size="sm" onClick={() => setEditModalOpen(true)}>
+							<Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+							Editar Metadados
+						</Button>
+						<Link
+							href={`/cases/${caseData.id}/analysis/new`}
+							className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-brand-700"
+						>
+							<Satellite className="h-3.5 w-3.5" aria-hidden="true" />
+							Nova Análise Multitemporal
+						</Link>
+					</div>
 				) : null}
 			</div>
 
@@ -252,7 +261,7 @@ function CaseDetailContent() {
 						<div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-600">
 							<CalendarClock className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
 							<span>
-								Nenhuma execução iniciada para este caso. A descoberta de cenas satelitais STAC (T0 e T1) e o disparo de análise serão conectados nas etapas WEB-05 e WEB-06.
+								Nenhuma execução iniciada para este caso. Utilize &apos;Nova Análise Multitemporal&apos; para descobrir cenas Sentinel-2 (T0/T1) e configurar o preset espectral.
 							</span>
 						</div>
 					) : (

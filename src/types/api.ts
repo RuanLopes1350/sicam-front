@@ -64,6 +64,24 @@ export type TerritoryMunicipalitiesResponse =
 
 export type TerritoryMunicipalityItem = TerritoryMunicipalitiesResponse['items'][number];
 
+export type SceneSearchBody =
+	paths['/api/v1/cases/{caseId}/scenes/search']['post']['requestBody']['content']['application/json'];
+
+export type SceneSearchResponse =
+	paths['/api/v1/cases/{caseId}/scenes/search']['post']['responses'][200]['content']['application/json'];
+
+export type SceneCandidate = SceneSearchResponse['t0Candidates'][number];
+export type StacProvider = SceneCandidate['provider'];
+export type ProviderWarning = SceneSearchResponse['providerWarnings'][number];
+
+export type CreateRunBody =
+	paths['/api/v1/cases/{caseId}/runs']['post']['requestBody']['content']['application/json'];
+
+export type RunPresetName = CreateRunBody['presetName'];
+export type CustomAlgorithmParams = NonNullable<CreateRunBody['customParams']>;
+export type AnalysisPresets = SystemCapabilitiesResponse['analysis']['presets'];
+export type AnalysisHardBounds = SystemCapabilitiesResponse['analysis']['hardBounds'];
+
 export type RunDetailResponse =
 	paths['/api/v1/runs/{runId}']['get']['responses'][200]['content']['application/json'];
 
