@@ -118,6 +118,10 @@ export type ReviewFeatureBody =
 export type ReviewFeatureResponse =
 	paths['/api/v1/runs/{runId}/features/{featureId}/review']['patch']['responses'][200]['content']['application/json'];
 
+export type RunWaybackResponse =
+	paths['/api/v1/runs/{runId}/wayback']['get']['responses'][200]['content']['application/json'];
+export type WaybackVintageItem = RunWaybackResponse['vintages'][number];
+
 export type ExportMetadataResponse =
 	paths['/api/v1/runs/{runId}/export']['get']['responses'][200]['content']['application/json'];
 

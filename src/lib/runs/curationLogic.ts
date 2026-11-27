@@ -59,6 +59,9 @@ export const REVIEW_STATUS_META: Record<
 };
 
 export type SpectralCompositionMode = 'rgb' | 'false_color';
+export type SwipeVisualMode = 'hires_wayback' | SpectralCompositionMode;
+
+export const WAYBACK_VISUAL_MODE_LABEL = 'Alta Resolução (Linha do Tempo)';
 
 export const SPECTRAL_MODE_ASSETS: Record<
 	SpectralCompositionMode,

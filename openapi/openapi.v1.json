@@ -9568,6 +9568,490 @@
         }
       }
     },
+    "/api/v1/runs/{runId}/wayback": {
+      "get": {
+        "summary": "Descobre safras históricas Esri World Imagery Wayback com alterações reais sobre a AOI para comparação em alta resolução",
+        "tags": [
+          "Runs"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "in": "path",
+            "name": "runId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "aoiCenterLonLat": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "maxZoom": {
+                      "type": "integer",
+                      "minimum": 10,
+                      "maximum": 19
+                    },
+                    "vintages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "releaseNum": {
+                            "type": "integer",
+                            "exclusiveMinimum": true,
+                            "minimum": 0
+                          },
+                          "itemId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "itemTitle": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "releaseDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "captureDate": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "effectiveDate": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "resolutionM": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "exclusiveMinimum": true,
+                            "minimum": 0
+                          },
+                          "providerLabel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "maxZoom": {
+                            "type": "integer",
+                            "minimum": 10,
+                            "maximum": 19
+                          },
+                          "tileUrlTemplate": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "releaseNum",
+                          "itemId",
+                          "itemTitle",
+                          "releaseDate",
+                          "captureDate",
+                          "effectiveDate",
+                          "resolutionM",
+                          "providerLabel",
+                          "maxZoom",
+                          "tileUrlTemplate"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "selectedT0": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "releaseNum": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "minimum": 0
+                        },
+                        "itemId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "itemTitle": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "releaseDate": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "captureDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "effectiveDate": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "resolutionM": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "exclusiveMinimum": true,
+                          "minimum": 0
+                        },
+                        "providerLabel": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "maxZoom": {
+                          "type": "integer",
+                          "minimum": 10,
+                          "maximum": 19
+                        },
+                        "tileUrlTemplate": {
+                          "type": "string",
+                          "format": "uri"
+                        }
+                      },
+                      "required": [
+                        "releaseNum",
+                        "itemId",
+                        "itemTitle",
+                        "releaseDate",
+                        "captureDate",
+                        "effectiveDate",
+                        "resolutionM",
+                        "providerLabel",
+                        "maxZoom",
+                        "tileUrlTemplate"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "selectedT1": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "releaseNum": {
+                          "type": "integer",
+                          "exclusiveMinimum": true,
+                          "minimum": 0
+                        },
+                        "itemId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "itemTitle": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "releaseDate": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "captureDate": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "effectiveDate": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "resolutionM": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "exclusiveMinimum": true,
+                          "minimum": 0
+                        },
+                        "providerLabel": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "maxZoom": {
+                          "type": "integer",
+                          "minimum": 10,
+                          "maximum": 19
+                        },
+                        "tileUrlTemplate": {
+                          "type": "string",
+                          "format": "uri"
+                        }
+                      },
+                      "required": [
+                        "releaseNum",
+                        "itemId",
+                        "itemTitle",
+                        "releaseDate",
+                        "captureDate",
+                        "effectiveDate",
+                        "resolutionM",
+                        "providerLabel",
+                        "maxZoom",
+                        "tileUrlTemplate"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "aoiCenterLonLat",
+                    "maxZoom",
+                    "vintages",
+                    "selectedT0",
+                    "selectedT1"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "detail",
+                    "instance",
+                    "correlationId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "detail",
+                    "instance",
+                    "correlationId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "correlationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "invalidParams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "meta": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "field",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "detail",
+                    "instance",
+                    "correlationId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runs/{runId}/export": {
       "post": {
         "summary": "Solicita emissão assíncrona da Carta-Imagem PDF 300 DPI + Pacote Técnico .zip (Idempotency-Key + fila cartography-export)",
@@ -9595,6 +10079,22 @@
                       "null"
                     ],
                     "maxLength": 600
+                  },
+                  "t0WaybackReleaseNum": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": true,
+                    "minimum": 0
+                  },
+                  "t1WaybackReleaseNum": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "exclusiveMinimum": true,
+                    "minimum": 0
                   }
                 },
                 "additionalProperties": false

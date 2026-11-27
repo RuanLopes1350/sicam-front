@@ -3588,6 +3588,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runId}/wayback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Descobre safras históricas Esri World Imagery Wayback com alterações reais sobre a AOI para comparação em alta resolução */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    runId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uuid */
+                            runId: string;
+                            aoiCenterLonLat: [
+                                number,
+                                number
+                            ];
+                            maxZoom: number;
+                            vintages: {
+                                releaseNum: number;
+                                itemId: string;
+                                itemTitle: string;
+                                releaseDate: string;
+                                captureDate: string | null;
+                                effectiveDate: string;
+                                resolutionM: number | null;
+                                providerLabel: string | null;
+                                maxZoom: number;
+                                /** Format: uri */
+                                tileUrlTemplate: string;
+                            }[];
+                            selectedT0: {
+                                releaseNum: number;
+                                itemId: string;
+                                itemTitle: string;
+                                releaseDate: string;
+                                captureDate: string | null;
+                                effectiveDate: string;
+                                resolutionM: number | null;
+                                providerLabel: string | null;
+                                maxZoom: number;
+                                /** Format: uri */
+                                tileUrlTemplate: string;
+                            } | null;
+                            selectedT1: {
+                                releaseNum: number;
+                                itemId: string;
+                                itemTitle: string;
+                                releaseDate: string;
+                                captureDate: string | null;
+                                effectiveDate: string;
+                                resolutionM: number | null;
+                                providerLabel: string | null;
+                                maxZoom: number;
+                                /** Format: uri */
+                                tileUrlTemplate: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            type: string;
+                            title: string;
+                            status: number;
+                            code: string;
+                            detail: string;
+                            instance: string;
+                            /** Format: uuid */
+                            correlationId: string;
+                            invalidParams?: {
+                                field: string;
+                                reason: string;
+                                meta?: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            type: string;
+                            title: string;
+                            status: number;
+                            code: string;
+                            detail: string;
+                            instance: string;
+                            /** Format: uuid */
+                            correlationId: string;
+                            invalidParams?: {
+                                field: string;
+                                reason: string;
+                                meta?: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            type: string;
+                            title: string;
+                            status: number;
+                            code: string;
+                            detail: string;
+                            instance: string;
+                            /** Format: uuid */
+                            correlationId: string;
+                            invalidParams?: {
+                                field: string;
+                                reason: string;
+                                meta?: {
+                                    [key: string]: unknown;
+                                };
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runId}/export": {
         parameters: {
             query?: never;
@@ -3750,6 +3913,8 @@ export interface paths {
                          */
                         paperFormat?: "A4" | "A3";
                         observations?: string | null;
+                        t0WaybackReleaseNum?: number | null;
+                        t1WaybackReleaseNum?: number | null;
                     };
                 };
             };

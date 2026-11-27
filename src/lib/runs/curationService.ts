@@ -15,6 +15,7 @@ import type {
 	RunFeaturesGeoJsonResponse,
 	RunFeaturesQuery,
 	RunRasterAssetType,
+	RunWaybackResponse,
 } from '@/types/api';
 
 const UUID_REGEX =
@@ -193,4 +194,33 @@ export async function fetchRunRasterBlob(
 	}
 
 	return response.blob();
+}
+
+/**
+ * Consulta as safras históricas locais Esri Wayback para comparação visual em alta resolução no slider.
+ */
+export async function fetchRunWaybackTimeline(
+	runId: string,
+	client: SicamApiClient = apiClient,
+): Promise<RunWaybackResponse> {
+	if (!isValidUuid(runId)) {
+		throw new ApiProblemError({
+			type: 'about:blank',
+			title: 'Parâmetro de execução inválido',
+			status: 400,
+			code: 'ERR_VALIDATION_FAILED',
+			detail: 'runId inválido para consulta do histórico em alta resolução.',
+			instance: '/api/v1/runs/wayback',
+			correlationId: '',
+			invalidParams: [{ field: 'runId', reason: 'INVALID_UUID' }],
+		});
+	}
+
+	const result = await client.GET('/api/v1/runs/{runId}/wayback', {
+		params: {
+			path: { runId: runId.trim() },
+		},
+	});
+
+	return unwrapApiResult(result);
 }

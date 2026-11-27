@@ -172,10 +172,14 @@ export function deriveExportIdempotencyFingerprint(
 	runId: string,
 	paperFormat: PaperFormat,
 	observations: string,
+	t0WaybackReleaseNum?: number | null,
+	t1WaybackReleaseNum?: number | null,
 ): string {
 	return JSON.stringify({
 		runId,
 		paperFormat,
 		observations: observations.trim(),
+		t0WaybackReleaseNum: t0WaybackReleaseNum ?? null,
+		t1WaybackReleaseNum: t1WaybackReleaseNum ?? null,
 	});
 }

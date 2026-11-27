@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useRunRasters } from '@/hooks/useRunRasters';
+import { useRunWayback } from '@/hooks/useRunWayback';
 import { type ApiProblemError, isApiProblemError } from '@/lib/api/problemDetails';
 import { computeFeaturePolygonBbox } from '@/lib/runs/curationLogic';
 import { listRunFeaturesGeoJson, reviewRunFeature } from '@/lib/runs/curationService';
@@ -66,6 +67,16 @@ export function RunInspectionWorkbench({
 		run.rasterAssets,
 		true,
 	);
+	const {
+		vintages: waybackVintages,
+		selectedT0ReleaseNum,
+		selectedT1ReleaseNum,
+		setSelectedT0ReleaseNum,
+		setSelectedT1ReleaseNum,
+		selectedT0Vintage,
+		selectedT1Vintage,
+		isLoadingWayback,
+	} = useRunWayback(run.id, true);
 
 	const loadFeatures = useCallback(async () => {
 		setIsLoadingFeatures(true);
@@ -200,6 +211,12 @@ export function RunInspectionWorkbench({
 				t1AcquiredAt={run.t1.acquiredAt}
 				rasters={rasters}
 				isLoadingRasters={isLoadingRasters}
+				waybackVintages={waybackVintages}
+				selectedT0ReleaseNum={selectedT0ReleaseNum}
+				selectedT1ReleaseNum={selectedT1ReleaseNum}
+				onSelectT0Release={(rel) => setSelectedT0ReleaseNum(rel)}
+				onSelectT1Release={(rel) => setSelectedT1ReleaseNum(rel)}
+				isLoadingWayback={isLoadingWayback}
 				features={features}
 				selectedFeatureId={selectedFeatureId}
 				focusTargetBounds={focusTargetBounds}
@@ -278,6 +295,10 @@ export function RunInspectionWorkbench({
 				dismissedFeatureCount={run.summary.dismissedFeatureCount}
 				defaultPaperFormat={defaultPaperFormat}
 				supportedPaperFormats={supportedPaperFormats}
+				t0WaybackReleaseNum={selectedT0ReleaseNum}
+				t1WaybackReleaseNum={selectedT1ReleaseNum}
+				waybackT0Label={selectedT0Vintage?.effectiveDate ?? null}
+				waybackT1Label={selectedT1Vintage?.effectiveDate ?? null}
 				onClose={() => setExportModalOpen(false)}
 				onExportRequested={() => {
 					onExportStarted?.();

@@ -24,6 +24,10 @@ export interface RequestExportModalProps {
 	dismissedFeatureCount: number;
 	defaultPaperFormat?: PaperFormat;
 	supportedPaperFormats?: readonly PaperFormat[];
+	t0WaybackReleaseNum?: number | null;
+	t1WaybackReleaseNum?: number | null;
+	waybackT0Label?: string | null;
+	waybackT1Label?: string | null;
 	onClose: () => void;
 	onExportRequested: () => void;
 }
@@ -36,6 +40,10 @@ export function RequestExportModal({
 	dismissedFeatureCount,
 	defaultPaperFormat = 'A3',
 	supportedPaperFormats = ['A3', 'A4'],
+	t0WaybackReleaseNum = null,
+	t1WaybackReleaseNum = null,
+	waybackT0Label = null,
+	waybackT1Label = null,
 	onClose,
 	onExportRequested,
 }: RequestExportModalProps) {
@@ -46,8 +54,15 @@ export function RequestExportModal({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const fingerprint = useMemo(
-		() => deriveExportIdempotencyFingerprint(runId, paperFormat, observations),
-		[runId, paperFormat, observations],
+		() =>
+			deriveExportIdempotencyFingerprint(
+				runId,
+				paperFormat,
+				observations,
+				t0WaybackReleaseNum,
+				t1WaybackReleaseNum,
+			),
+		[runId, paperFormat, observations, t0WaybackReleaseNum, t1WaybackReleaseNum],
 	);
 	const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
 	const lastFingerprintRef = useRef(fingerprint);
@@ -91,6 +106,8 @@ export function RequestExportModal({
 				{
 					paperFormat,
 					observations: trimmedObs.length > 0 ? trimmedObs : null,
+					t0WaybackReleaseNum: t0WaybackReleaseNum ?? null,
+					t1WaybackReleaseNum: t1WaybackReleaseNum ?? null,
 				},
 				idempotencyKey,
 			);
@@ -217,6 +234,13 @@ export function RequestExportModal({
 						Serão gerados a Carta-Imagem `.pdf`, vetores `.geojson`/`.kml`, tabela `.csv` e o manifesto `.json` com hashes SHA-256.
 					</span>
 				</div>
+				{t0WaybackReleaseNum && t1WaybackReleaseNum ? (
+					<AlertBanner
+						variant="info"
+						title="Carta-Imagem em Alta Resolução sincronizada"
+						message={`A prancha PDF 300 DPI será composta com as safras Wayback selecionadas: T0 (${waybackT0Label ?? t0WaybackReleaseNum}) × T1 (${waybackT1Label ?? t1WaybackReleaseNum}).`}
+					/>
+				) : null}
 			</form>
 		</Modal>
 	);

@@ -14,6 +14,7 @@ import {
 } from '@/lib/runs/curationLogic';
 import {
 	fetchRunRasterBlob,
+	fetchRunWaybackTimeline,
 	listRunFeaturesGeoJson,
 	reviewRunFeature,
 } from '@/lib/runs/curationService';
@@ -247,6 +248,34 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 				);
 			}
 
+			if (url.pathname === `/api/v1/runs/${RUN_ID}/wayback` && req.method === 'GET') {
+				return new Response(
+					JSON.stringify({
+						runId: RUN_ID,
+						aoiCenterLonLat: [-60.145, -12.74],
+						maxZoom: 17,
+						vintages: [
+							{
+								releaseNum: 26334,
+								itemId: 'id-2026',
+								itemTitle: 'World Imagery (Wayback 2026-08-05)',
+								releaseDate: '2026-08-05',
+								captureDate: '2025-05-16',
+								effectiveDate: '2025-05-16',
+								resolutionM: 0.34,
+								providerLabel: 'Vantor · Vivid',
+								maxZoom: 17,
+								tileUrlTemplate:
+									'https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/26334/{z}/{y}/{x}',
+							},
+						],
+						selectedT0: null,
+						selectedT1: null,
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } },
+				);
+			}
+
 			if (url.pathname === `/api/v1/runs/${RUN_ID}/rasters/t0_rgb` && req.method === 'GET') {
 				rasterCalls += 1;
 				if (rasterCalls === 1) {
@@ -349,6 +378,11 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 		expect(pngUpscaledBlob.size).toBe(4);
 		const lastRasterCall = mockFetch.mock.calls.at(-1)?.[0] as Request;
 		expect(lastRasterCall.url).toBe(`https://api.sicam.test/api/v1/runs/${RUN_ID}/rasters/t0_rgb?upscale=4`);
+
+		const waybackRes = await fetchRunWaybackTimeline(RUN_ID, client);
+		expect(waybackRes.maxZoom).toBe(17);
+		expect(waybackRes.vintages).toHaveLength(1);
+		expect(waybackRes.vintages[0]?.resolutionM).toBe(0.34);
 	});
 
 	it('deve renderizar MultitemporalSwipeMap, FeaturesCurationTable e DismissFeatureModal em SSR sem erros', () => {
@@ -366,13 +400,12 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 				onSelectFeature={() => undefined}
 			/>,
 		);
+		expect(swipeHtml).toContain('Alta Resolução (Linha do Tempo)');
 		expect(swipeHtml).toContain('RGB Cor Natural');
 		expect(swipeHtml).toContain('Falsa-Cor Infravermelho (NIR)');
 		expect(swipeHtml).toContain('Máscara ΔNDVI + SCL');
 		expect(swipeHtml).toContain('Posição da cortina comparativa T0 versus T1');
-		expect(swipeHtml).toContain('Super-Resolução 4×');
-		expect(swipeHtml).toContain('Pixel Nativo 10m');
-		expect(swipeHtml).toContain('Sentinel-2 L2A · 10 m/px (Super-resolução 4×)');
+		expect(swipeHtml).toContain('Alta Resolução Esri World Imagery (Detecção Sentinel-2 10m)');
 
 		const tableWritableHtml = renderToStaticMarkup(
 			<FeaturesCurationTable

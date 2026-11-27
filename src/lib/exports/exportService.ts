@@ -126,6 +126,12 @@ export async function requestRunExport(
 	const normalizedBody: RequestExportBody = {
 		paperFormat: body.paperFormat ?? 'A3',
 		observations: trimmedObs.length > 0 ? trimmedObs : null,
+		...(body.t0WaybackReleaseNum !== undefined
+			? { t0WaybackReleaseNum: body.t0WaybackReleaseNum }
+			: {}),
+		...(body.t1WaybackReleaseNum !== undefined
+			? { t1WaybackReleaseNum: body.t1WaybackReleaseNum }
+			: {}),
 	};
 
 	const result = await client.POST('/api/v1/runs/{runId}/export', {

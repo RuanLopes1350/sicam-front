@@ -32,10 +32,16 @@ import {
 	bounds4674ToImageCoordinates,
 	SPECTRAL_MODE_ASSETS,
 	type SpectralCompositionMode,
+	type SwipeVisualMode,
+	WAYBACK_VISUAL_MODE_LABEL,
 } from '@/lib/runs/curationLogic';
 import { cn } from '@/lib/utils/cn';
 import { formatDateTimePtBr } from '@/lib/utils/formatters';
-import type { AoiPolygonGeoJson, DetectedFeatureGeoJson } from '@/types/api';
+import type {
+	AoiPolygonGeoJson,
+	DetectedFeatureGeoJson,
+	WaybackVintageItem,
+} from '@/types/api';
 
 export interface MultitemporalSwipeMapProps {
 	aoiGeoJson: AoiPolygonGeoJson | null;
@@ -43,6 +49,12 @@ export interface MultitemporalSwipeMapProps {
 	t1AcquiredAt: string;
 	rasters: LoadedRasterMap;
 	isLoadingRasters: boolean;
+	waybackVintages?: readonly WaybackVintageItem[];
+	selectedT0ReleaseNum?: number | null;
+	selectedT1ReleaseNum?: number | null;
+	onSelectT0Release?: (releaseNum: number) => void;
+	onSelectT1Release?: (releaseNum: number) => void;
+	isLoadingWayback?: boolean;
 	features: readonly DetectedFeatureGeoJson[];
 	selectedFeatureId: string | null;
 	focusTargetBounds: [number, number, number, number] | null;
@@ -50,6 +62,8 @@ export interface MultitemporalSwipeMapProps {
 	onSelectFeature: (featureId: string) => void;
 }
 
+const WAYBACK_SOURCE_ID = 'sicam-wayback-hires';
+const WAYBACK_LAYER_ID = 'sicam-wayback-hires-layer';
 const IMAGE_SOURCE_ID = 'sicam-scene-raster';
 const IMAGE_LAYER_ID = 'sicam-scene-raster-layer';
 const MASK_SOURCE_ID = 'sicam-delta-mask';
@@ -59,6 +73,56 @@ const AOI_LINE_LAYER_ID = 'sicam-case-aoi-line';
 const FEATURES_SOURCE_ID = 'sicam-detected-features';
 const FEATURES_FILL_LAYER_ID = 'sicam-detected-features-fill';
 const FEATURES_LINE_LAYER_ID = 'sicam-detected-features-line';
+
+const waybackReleaseByMap = new WeakMap<MapLibreMapInstance, number>();
+
+function syncWaybackTileLayer(
+	map: MapLibreMapInstance,
+	vintage: WaybackVintageItem | undefined,
+	visible: boolean,
+	beforeLayerId?: string,
+) {
+	if (!visible || !vintage) {
+		if (map.getLayer(WAYBACK_LAYER_ID)) {
+			map.setLayoutProperty(WAYBACK_LAYER_ID, 'visibility', 'none');
+		}
+		return;
+	}
+
+	const prevRelease = waybackReleaseByMap.get(map);
+	const existingSource = map.getSource(WAYBACK_SOURCE_ID);
+
+	if (!existingSource || prevRelease !== vintage.releaseNum) {
+		if (map.getLayer(WAYBACK_LAYER_ID)) {
+			map.removeLayer(WAYBACK_LAYER_ID);
+		}
+		if (existingSource) {
+			map.removeSource(WAYBACK_SOURCE_ID);
+		}
+		map.addSource(WAYBACK_SOURCE_ID, {
+			type: 'raster',
+			tiles: [vintage.tileUrlTemplate],
+			tileSize: 256,
+			maxzoom: vintage.maxZoom,
+			attribution: `Esri Wayback · ${vintage.effectiveDate}`,
+		});
+		map.addLayer(
+			{
+				id: WAYBACK_LAYER_ID,
+				type: 'raster',
+				source: WAYBACK_SOURCE_ID,
+				paint: {
+					'raster-fade-duration': 0,
+					'raster-opacity': 1,
+				},
+			},
+			beforeLayerId && map.getLayer(beforeLayerId) ? beforeLayerId : undefined,
+		);
+		waybackReleaseByMap.set(map, vintage.releaseNum);
+	} else if (map.getLayer(WAYBACK_LAYER_ID)) {
+		map.setLayoutProperty(WAYBACK_LAYER_ID, 'visibility', 'visible');
+	}
+}
 
 function syncImageRasterLayer(
 	map: MapLibreMapInstance,
@@ -114,6 +178,8 @@ function syncMapLayers(
 	map: MapLibreMapInstance,
 	params: {
 		ready: boolean;
+		isHiResMode: boolean;
+		waybackVintage: WaybackVintageItem | undefined;
 		sceneRaster: LoadedRasterAsset | undefined;
 		maskRaster: LoadedRasterAsset | undefined;
 		showMask: boolean;
@@ -226,13 +292,14 @@ function syncMapLayers(
 		map.setLayoutProperty(FEATURES_LINE_LAYER_ID, 'visibility', visibilityVal);
 	}
 
-	// Posiciona camadas raster abaixo dos contornos vetoriais
+	// Posiciona tiles Wayback / rasters Sentinel-2 abaixo dos contornos vetoriais
+	syncWaybackTileLayer(map, params.waybackVintage, params.isHiResMode, AOI_LINE_LAYER_ID);
 	syncImageRasterLayer(
 		map,
 		IMAGE_SOURCE_ID,
 		IMAGE_LAYER_ID,
 		params.sceneRaster,
-		true,
+		!params.isHiResMode,
 		1,
 		AOI_LINE_LAYER_ID,
 		params.sceneResampling,
@@ -258,6 +325,12 @@ export function MultitemporalSwipeMap({
 	t1AcquiredAt,
 	rasters,
 	isLoadingRasters,
+	waybackVintages = [],
+	selectedT0ReleaseNum = null,
+	selectedT1ReleaseNum = null,
+	onSelectT0Release,
+	onSelectT1Release,
+	isLoadingWayback = false,
 	features,
 	selectedFeatureId,
 	focusTargetBounds,
@@ -276,7 +349,7 @@ export function MultitemporalSwipeMap({
 	const hasFittedInitialRef = useRef(false);
 
 	const [basemap, setBasemap] = useState<BasemapVariant>('satellite');
-	const [spectralMode, setSpectralMode] = useState<SpectralCompositionMode>('rgb');
+	const [visualMode, setVisualMode] = useState<SwipeVisualMode>('hires_wayback');
 	const [showMask, setShowMask] = useState(false);
 	const [maskOpacity, setMaskOpacity] = useState(0.55);
 	const [showVectors, setShowVectors] = useState(true);
@@ -315,10 +388,26 @@ export function MultitemporalSwipeMap({
 		[features, selectedFeatureId],
 	);
 
-	const modeAssets = SPECTRAL_MODE_ASSETS[spectralMode];
+	const isHiResMode = visualMode === 'hires_wayback';
+	const activeSpectralMode: SpectralCompositionMode =
+		visualMode === 'false_color' ? 'false_color' : 'rgb';
+	const modeAssets = SPECTRAL_MODE_ASSETS[activeSpectralMode];
 	const rasterT0 = rasters[modeAssets.t0Asset];
 	const rasterT1 = rasters[modeAssets.t1Asset];
 	const maskRaster = rasters.delta_ndvi_mask;
+
+	const waybackT0 = useMemo(
+		() =>
+			waybackVintages.find((v) => v.releaseNum === selectedT0ReleaseNum) ??
+			waybackVintages.at(-1),
+		[waybackVintages, selectedT0ReleaseNum],
+	);
+	const waybackT1 = useMemo(
+		() =>
+			waybackVintages.find((v) => v.releaseNum === selectedT1ReleaseNum) ??
+			waybackVintages[0],
+		[waybackVintages, selectedT1ReleaseNum],
+	);
 
 	const defaultBounds = useMemo<[number, number, number, number] | null>(() => {
 		const aoiBbox = computePolygonBbox(aoiGeoJson);
@@ -332,6 +421,8 @@ export function MultitemporalSwipeMap({
 		if (mapT0Ref.current) {
 			syncMapLayers(mapT0Ref.current, {
 				ready: styleReadyT0Ref.current,
+				isHiResMode,
+				waybackVintage: waybackT0,
 				sceneRaster: rasterT0,
 				maskRaster: undefined,
 				showMask: false,
@@ -345,6 +436,8 @@ export function MultitemporalSwipeMap({
 		if (mapT1Ref.current) {
 			syncMapLayers(mapT1Ref.current, {
 				ready: styleReadyT1Ref.current,
+				isHiResMode,
+				waybackVintage: waybackT1,
 				sceneRaster: rasterT1,
 				maskRaster,
 				showMask,
@@ -483,10 +576,12 @@ export function MultitemporalSwipeMap({
 		const style = buildBasemapStyle(basemap);
 		if (mapT0Ref.current) {
 			styleReadyT0Ref.current = false;
+			waybackReleaseByMap.delete(mapT0Ref.current);
 			mapT0Ref.current.setStyle(style);
 		}
 		if (mapT1Ref.current) {
 			styleReadyT1Ref.current = false;
+			waybackReleaseByMap.delete(mapT1Ref.current);
 			mapT1Ref.current.setStyle(style);
 		}
 	}, [basemap]);
@@ -496,7 +591,7 @@ export function MultitemporalSwipeMap({
 	});
 
 	const fitMapsToBounds = useCallback(
-		(bounds: [number, number, number, number], duration = 500, maxZoom = 14.2) => {
+		(bounds: [number, number, number, number], duration = 500, maxZoom = 17.2) => {
 			const [minLon, minLat, maxLon, maxLat] = bounds;
 			const target: [[number, number], [number, number]] = [
 				[minLon, minLat],
@@ -511,15 +606,15 @@ export function MultitemporalSwipeMap({
 	useEffect(() => {
 		if (!hasFittedInitialRef.current && defaultBounds && mapT1Ref.current) {
 			hasFittedInitialRef.current = true;
-			fitMapsToBounds(defaultBounds, 0);
+			fitMapsToBounds(defaultBounds, 0, isHiResMode ? 17.2 : 14.2);
 		}
-	}, [defaultBounds, fitMapsToBounds]);
+	}, [defaultBounds, fitMapsToBounds, isHiResMode]);
 
 	useEffect(() => {
 		if (focusTargetBounds && focusSequence > 0) {
-			fitMapsToBounds(focusTargetBounds, 550, 15.2);
+			fitMapsToBounds(focusTargetBounds, 550, isHiResMode ? 17.5 : 15.2);
 		}
-	}, [focusTargetBounds, focusSequence, fitMapsToBounds]);
+	}, [focusTargetBounds, focusSequence, fitMapsToBounds, isHiResMode]);
 
 	// Arraste horizontal da cortina Before/After
 	const updateSwipeFromClientX = useCallback((clientX: number) => {
@@ -577,12 +672,20 @@ export function MultitemporalSwipeMap({
 
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div className="flex flex-wrap items-center gap-1.5">
+						<Button
+							size="sm"
+							variant={visualMode === 'hires_wayback' ? 'primary' : 'outline'}
+							onClick={() => setVisualMode('hires_wayback')}
+						>
+							<Layers className="h-3.5 w-3.5" aria-hidden="true" />
+							{WAYBACK_VISUAL_MODE_LABEL}
+						</Button>
 						{(Object.keys(SPECTRAL_MODE_ASSETS) as SpectralCompositionMode[]).map((mode) => (
 							<Button
 								key={mode}
 								size="sm"
-								variant={spectralMode === mode ? 'primary' : 'outline'}
-								onClick={() => setSpectralMode(mode)}
+								variant={visualMode === mode ? 'primary' : 'outline'}
+								onClick={() => setVisualMode(mode)}
 							>
 								<Layers className="h-3.5 w-3.5" aria-hidden="true" />
 								{SPECTRAL_MODE_ASSETS[mode].label}
@@ -629,42 +732,46 @@ export function MultitemporalSwipeMap({
 							<span>Polígonos Vetorizados</span>
 						</label>
 
-						<div
-							role="group"
-							aria-label="Modo de exibição do pixel Sentinel-2"
-							className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white"
-						>
-							<button
-								type="button"
-								onClick={() => setRasterResampling('linear')}
-								className={cn(
-									'px-2 py-1 text-[11px] font-medium transition-colors',
-									rasterResampling === 'linear'
-										? 'bg-brand-600 text-white'
-										: 'text-slate-600 hover:bg-slate-100',
-								)}
+						{!isHiResMode ? (
+							<div
+								role="group"
+								aria-label="Modo de exibição do pixel Sentinel-2"
+								className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white"
 							>
-								Super-Resolução 4×
-							</button>
-							<button
-								type="button"
-								onClick={() => setRasterResampling('nearest')}
-								className={cn(
-									'border-l border-slate-300 px-2 py-1 text-[11px] font-medium transition-colors',
-									rasterResampling === 'nearest'
-										? 'bg-brand-600 text-white'
-										: 'text-slate-600 hover:bg-slate-100',
-								)}
-							>
-								Pixel Nativo 10m
-							</button>
-						</div>
+								<button
+									type="button"
+									onClick={() => setRasterResampling('linear')}
+									className={cn(
+										'px-2 py-1 text-[11px] font-medium transition-colors',
+										rasterResampling === 'linear'
+											? 'bg-brand-600 text-white'
+											: 'text-slate-600 hover:bg-slate-100',
+									)}
+								>
+									Super-Resolução 4×
+								</button>
+								<button
+									type="button"
+									onClick={() => setRasterResampling('nearest')}
+									className={cn(
+										'border-l border-slate-300 px-2 py-1 text-[11px] font-medium transition-colors',
+										rasterResampling === 'nearest'
+											? 'bg-brand-600 text-white'
+											: 'text-slate-600 hover:bg-slate-100',
+									)}
+								>
+									Pixel Nativo 10m
+								</button>
+							</div>
+						) : null}
 
 						{defaultBounds ? (
 							<Button
 								size="sm"
 								variant="outline"
-								onClick={() => fitMapsToBounds(defaultBounds, 450)}
+								onClick={() =>
+									fitMapsToBounds(defaultBounds, 450, isHiResMode ? 17.2 : 14.2)
+								}
 							>
 								<Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
 								Enquadrar AOI
@@ -672,6 +779,53 @@ export function MultitemporalSwipeMap({
 						) : null}
 					</div>
 				</div>
+
+				{isHiResMode && waybackVintages.length > 0 ? (
+					<div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
+						<label className="inline-flex items-center gap-2 font-medium text-slate-700">
+							<span className="text-[11px] font-semibold text-sky-700">Safra T0 (Antes):</span>
+							<select
+								aria-label="Selecionar safra histórica T0"
+								value={waybackT0?.releaseNum ?? ''}
+								onChange={(event) => onSelectT0Release?.(Number(event.target.value))}
+								className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 focus:border-brand-600 focus:outline-none"
+							>
+								{waybackVintages.map((v) => (
+									<option key={v.releaseNum} value={v.releaseNum}>
+										{v.effectiveDate}
+										{v.resolutionM ? ` (${v.resolutionM.toFixed(2).replace('.', ',')} m)` : ''}
+									</option>
+								))}
+							</select>
+						</label>
+
+						<label className="inline-flex items-center gap-2 font-medium text-slate-700">
+							<span className="text-[11px] font-semibold text-amber-700">Safra T1 (Depois):</span>
+							<select
+								aria-label="Selecionar safra histórica T1"
+								value={waybackT1?.releaseNum ?? ''}
+								onChange={(event) => onSelectT1Release?.(Number(event.target.value))}
+								className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 focus:border-brand-600 focus:outline-none"
+							>
+								{waybackVintages.map((v) => (
+									<option key={v.releaseNum} value={v.releaseNum}>
+										{v.effectiveDate}
+										{v.resolutionM ? ` (${v.resolutionM.toFixed(2).replace('.', ',')} m)` : ''}
+									</option>
+								))}
+							</select>
+						</label>
+
+						<span className="text-[11px] text-slate-500">
+							Imagens históricas em alta resolução sincronizadas com a grade oficial (detecção NDVI 10m por cima).
+						</span>
+					</div>
+				) : isHiResMode && isLoadingWayback ? (
+					<div className="flex items-center gap-2 text-[11px] text-slate-500">
+						<Spinner size="sm" />
+						<span>Consultando safras históricas locais de alta resolução...</span>
+					</div>
+				) : null}
 			</CardHeader>
 
 			<CardContent className="space-y-3 p-0">
@@ -730,35 +884,45 @@ export function MultitemporalSwipeMap({
 					{/* Rótulos fixos T0 / T1 */}
 					<div className="pointer-events-none absolute left-3 top-3 z-20 flex items-center gap-2">
 						<Badge variant="info" className="bg-slate-950/85 text-white border-slate-700">
-							T0 Base · {formatDateTimePtBr(t0AcquiredAt).slice(0, 10)}
+							T0 Base ·{' '}
+							{isHiResMode && waybackT0
+								? waybackT0.effectiveDate
+								: formatDateTimePtBr(t0AcquiredAt).slice(0, 10)}
 						</Badge>
 					</div>
 
 					<div className="pointer-events-none absolute right-12 top-3 z-20 flex items-center gap-2">
 						<Badge variant="warning" className="bg-slate-950/85 text-amber-200 border-slate-700">
-							T1 Alvo · {formatDateTimePtBr(t1AcquiredAt).slice(0, 10)}
+							T1 Alvo ·{' '}
+							{isHiResMode && waybackT1
+								? waybackT1.effectiveDate
+								: formatDateTimePtBr(t1AcquiredAt).slice(0, 10)}
 						</Badge>
 					</div>
 
-					{/* Selo técnico da resolução nativa Sentinel-2 */}
+					{/* Selo técnico da resolução exibida */}
 					<div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2">
 						<Badge
 							variant="neutral"
 							className="border-slate-700 bg-slate-950/85 text-[11px] font-medium text-slate-100"
 						>
-							{rasterResampling === 'linear'
-								? 'Sentinel-2 L2A · 10 m/px (Super-resolução 4×)'
-								: 'Sentinel-2 L2A · 10 m/px (Pixel Nativo)'}
+							{isHiResMode
+								? waybackT1?.resolutionM
+									? `Alta Resolução Wayback · ${waybackT1.resolutionM.toFixed(2).replace('.', ',')} m/px (Detecção Sentinel-2 10m)`
+									: 'Alta Resolução Esri World Imagery (Detecção Sentinel-2 10m)'
+								: rasterResampling === 'linear'
+									? 'Sentinel-2 L2A · 10 m/px (Super-resolução 4×)'
+									: 'Sentinel-2 L2A · 10 m/px (Pixel Nativo)'}
 						</Badge>
 					</div>
 				</div>
 
-				{isOverZoomed ? (
+				{!isHiResMode && isOverZoomed ? (
 					<div className="border-t border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-900">
 						Zoom acima do detalhamento físico do Sentinel-2 (10 m/px). Reduza o zoom ou clique em{' '}
 						<button
 							type="button"
-							onClick={() => defaultBounds && fitMapsToBounds(defaultBounds, 450)}
+							onClick={() => defaultBounds && fitMapsToBounds(defaultBounds, 450, 14.2)}
 							className="font-semibold underline hover:text-amber-700"
 						>
 							Enquadrar AOI
