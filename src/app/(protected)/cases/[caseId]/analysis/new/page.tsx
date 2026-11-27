@@ -2,8 +2,8 @@
 
 import { ArrowLeft, Satellite } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { AnalysisPresetPanel } from '@/components/scenes/AnalysisPresetPanel';
 import { SceneCandidateList } from '@/components/scenes/SceneCandidateList';
@@ -17,14 +17,20 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useSystemCapabilities } from '@/hooks/useSystemCapabilities';
 import { type ApiProblemError, isApiProblemError } from '@/lib/api/problemDetails';
 import { getCaseById } from '@/lib/cases/caseService';
+import { createRun, generateIdempotencyKey } from '@/lib/runs/runService';
+import { deriveIdempotencyFingerprint } from '@/lib/runs/runStages';
 import {
+	buildCreateRunPayload,
 	buildDefaultSearchWindows,
 	STAC_PROVIDER_LABELS,
+	validateCustomParams,
+	validateSelectionPair,
 } from '@/lib/scenes/sceneSelection';
 import { searchScenes } from '@/lib/scenes/sceneService';
 import { formatAreaHa } from '@/lib/utils/formatters';
 import type {
 	CaseDetailResponse,
+	CreateRunBody,
 	CustomAlgorithmParams,
 	RunPresetName,
 	SceneCandidate,
@@ -45,6 +51,7 @@ const FALLBACK_CUSTOM_PARAMS: CustomAlgorithmParams = {
 };
 
 function NewCaseAnalysisContent() {
+	const router = useRouter();
 	const params = useParams<{ caseId: string }>();
 	const caseId = typeof params?.caseId === 'string' ? params.caseId : '';
 	const { capabilities, error: capabilitiesError } = useSystemCapabilities(true);
@@ -72,6 +79,53 @@ function NewCaseAnalysisContent() {
 	const [presetName, setPresetName] = useState<RunPresetName>('TECHNICAL_STANDARD');
 	const [customParams, setCustomParams] = useState<CustomAlgorithmParams>(FALLBACK_CUSTOM_PARAMS);
 	const hasEditedCustomRef = useRef(false);
+
+	const [isSubmittingRun, setIsSubmittingRun] = useState(false);
+	const [submitProblem, setSubmitProblem] = useState<ApiProblemError | null>(null);
+	const [submitError, setSubmitError] = useState<string | null>(null);
+
+	const readyPayload = useMemo(() => {
+		if (!selectedT0 || !selectedT1) {
+			return null;
+		}
+		if (validateSelectionPair(selectedT0, selectedT1).length > 0) {
+			return null;
+		}
+		if (presetName === 'CUSTOM') {
+			const hardBounds = capabilities?.analysis.hardBounds;
+			if (!hardBounds || validateCustomParams(customParams, hardBounds).length > 0) {
+				return null;
+			}
+			return buildCreateRunPayload({
+				t0: selectedT0,
+				t1: selectedT1,
+				presetName,
+				customParams,
+			});
+		}
+		return buildCreateRunPayload({
+			t0: selectedT0,
+			t1: selectedT1,
+			presetName,
+			customParams: null,
+		});
+	}, [selectedT0, selectedT1, presetName, customParams, capabilities]);
+
+	const fingerprint = useMemo(
+		() => deriveIdempotencyFingerprint(caseId, readyPayload),
+		[caseId, readyPayload],
+	);
+	const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
+	const lastFingerprintRef = useRef(fingerprint);
+
+	useEffect(() => {
+		if (lastFingerprintRef.current !== fingerprint) {
+			lastFingerprintRef.current = fingerprint;
+			setIdempotencyKey(generateIdempotencyKey());
+			setSubmitProblem(null);
+			setSubmitError(null);
+		}
+	}, [fingerprint]);
 
 	const loadCase = useCallback(async () => {
 		if (!caseId) {
@@ -125,6 +179,26 @@ function NewCaseAnalysisContent() {
 			}
 		} finally {
 			setIsSearching(false);
+		}
+	}
+
+	async function handleTriggerRun(payload: CreateRunBody) {
+		if (!caseId) return;
+		setIsSubmittingRun(true);
+		setSubmitProblem(null);
+		setSubmitError(null);
+
+		try {
+			const accepted = await createRun(caseId, payload, idempotencyKey);
+			router.push(`/cases/${caseId}/runs/${accepted.runId}`);
+		} catch (err) {
+			if (isApiProblemError(err)) {
+				setSubmitProblem(err);
+			} else {
+				setSubmitError('Falha inesperada ao disparar a análise na fila geo-analysis.');
+			}
+		} finally {
+			setIsSubmittingRun(false);
 		}
 	}
 
@@ -270,6 +344,11 @@ function NewCaseAnalysisContent() {
 				presetName={presetName}
 				customParams={customParams}
 				hardBounds={capabilities?.analysis.hardBounds ?? null}
+				idempotencyKey={idempotencyKey}
+				isSubmitting={isSubmittingRun}
+				submitProblem={submitProblem}
+				submitError={submitError}
+				onTriggerRun={(payload) => void handleTriggerRun(payload)}
 			/>
 		</div>
 	);

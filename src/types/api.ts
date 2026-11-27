@@ -87,6 +87,11 @@ export type RunDetailResponse =
 
 export type RunStatus = RunDetailResponse['status'];
 
+export type CreateRunAcceptedResponse =
+	paths['/api/v1/cases/{caseId}/runs']['post']['responses'][202]['content']['application/json'];
+
+export type RunRasterAssetItem = RunDetailResponse['rasterAssets'][number];
+
 export type RunFeaturesResponse =
 	paths['/api/v1/runs/{runId}/features']['get']['responses'][200]['content']['application/json'];
 

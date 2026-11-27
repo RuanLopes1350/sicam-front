@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, CalendarClock, Edit3, Layers, MapPin, Satellite } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Edit3, ExternalLink, Layers, MapPin, Satellite } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/hooks/useAuth';
 import { type ApiProblemError, isApiProblemError } from '@/lib/api/problemDetails';
 import { CASE_STATUS_META, getCaseById } from '@/lib/cases/caseService';
+import { isTerminalAnalysisStatus } from '@/lib/runs/runStages';
 import { formatAreaHa, formatDateTimePtBr } from '@/lib/utils/formatters';
 import type { CaseDetailResponse, UpdateCaseResponse } from '@/types/api';
 
@@ -274,11 +275,13 @@ function CaseDetailContent() {
 										<th className="px-3 py-2.5">Preset</th>
 										<th className="px-3 py-2.5">Janela T0 → T1</th>
 										<th className="px-3 py-2.5">Supressão / Regeneração</th>
+										<th className="px-3 py-2.5 text-right">Ação</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100 bg-white">
 									{caseData.runs.map((run) => {
 										const statusMeta = CASE_STATUS_META[run.status];
+										const isRunning = !isTerminalAnalysisStatus(run.status);
 										return (
 											<tr key={run.id}>
 												<td className="whitespace-nowrap px-3 py-2.5 font-mono font-bold text-slate-900">
@@ -302,6 +305,15 @@ function CaseDetailContent() {
 													<span className="text-emerald-700">
 														{formatAreaHa(run.regrowthHa)}
 													</span>
+												</td>
+												<td className="whitespace-nowrap px-3 py-2.5 text-right">
+													<Link
+														href={`/cases/${caseData.id}/runs/${run.id}`}
+														className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-50"
+													>
+														{isRunning ? 'Acompanhar' : 'Abrir'}
+														<ExternalLink className="h-3 w-3" aria-hidden="true" />
+													</Link>
 												</td>
 											</tr>
 										);
