@@ -1,4 +1,6 @@
+import type { Feature, FeatureCollection } from 'geojson';
 import type {
+	AoiPolygonGeoJson,
 	DetectedFeatureGeoJson,
 	FeatureClass,
 	FeatureReviewStatus,
@@ -160,4 +162,49 @@ export function filterAndSortFeatures(
 	);
 
 	return filtered;
+}
+
+/**
+ * Constrói a coleção GeoJSON da Área de Interesse (AOI) para o comparador multitemporal:
+ * polígono colorido translúcido ('aoi_polygon') e pontos dos vértices marcados ('aoi_vertex'),
+ * sem duplicar o ponto repetido de fechamento do anel GeoJSON.
+ */
+export function buildSwipeAoiFeatureCollection(
+	aoiGeoJson: AoiPolygonGeoJson | null,
+): FeatureCollection {
+	if (!aoiGeoJson) {
+		return { type: 'FeatureCollection', features: [] };
+	}
+
+	const features: Feature[] = [
+		{
+			type: 'Feature',
+			properties: { kind: 'aoi_polygon' },
+			geometry: aoiGeoJson,
+		},
+	];
+
+	const ring = aoiGeoJson.coordinates?.[0] ?? [];
+	const lastPt = ring[ring.length - 1];
+	const firstPt = ring[0];
+	const closesRing =
+		ring.length >= 2 &&
+		firstPt !== undefined &&
+		lastPt !== undefined &&
+		Math.abs(firstPt[0] - lastPt[0]) < 1e-7 &&
+		Math.abs(firstPt[1] - lastPt[1]) < 1e-7;
+	const vertexCount = closesRing ? ring.length - 1 : ring.length;
+
+	for (let i = 0; i < vertexCount; i++) {
+		const pt = ring[i];
+		if (pt) {
+			features.push({
+				type: 'Feature',
+				properties: { kind: 'aoi_vertex', index: i + 1 },
+				geometry: { type: 'Point', coordinates: pt },
+			});
+		}
+	}
+
+	return { type: 'FeatureCollection', features };
 }

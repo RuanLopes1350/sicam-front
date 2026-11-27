@@ -8,6 +8,7 @@ import { isApiProblemError } from '@/lib/api/problemDetails';
 import { resetTokenStoreForTesting, setAuthSession } from '@/lib/api/tokenStore';
 import {
 	bounds4674ToImageCoordinates,
+	buildSwipeAoiFeatureCollection,
 	computeFeaturePolygonBbox,
 	filterAndSortFeatures,
 	validateDismissalReason,
@@ -403,9 +404,34 @@ describe('WEB-07 — Mesa Swipe T0×T1, Rasters S3 Autenticados e Curadoria Audi
 		expect(swipeHtml).toContain('Alta Resolução (Linha do Tempo)');
 		expect(swipeHtml).toContain('RGB Cor Natural');
 		expect(swipeHtml).toContain('Falsa-Cor Infravermelho (NIR)');
+		expect(swipeHtml).toContain('Território Marcado (AOI)');
 		expect(swipeHtml).toContain('Máscara ΔNDVI + SCL');
 		expect(swipeHtml).toContain('Posição da cortina comparativa T0 versus T1');
 		expect(swipeHtml).toContain('Alta Resolução Esri World Imagery (Detecção Sentinel-2 10m)');
+
+		// Valida geração da demarcação da AOI (polígono colorido + 4 pontos sem duplicar vértice final)
+		const emptyAoiFc = buildSwipeAoiFeatureCollection(null);
+		expect(emptyAoiFc.features).toHaveLength(0);
+		const rectAoiFc = buildSwipeAoiFeatureCollection({
+			type: 'Polygon',
+			coordinates: [
+				[
+					[-60.2, -12.7],
+					[-60.19, -12.7],
+					[-60.19, -12.69],
+					[-60.2, -12.69],
+					[-60.2, -12.7],
+				],
+			],
+		});
+		expect(rectAoiFc.features).toHaveLength(5);
+		expect(rectAoiFc.features[0]?.properties?.kind).toBe('aoi_polygon');
+		expect(rectAoiFc.features.slice(1).map((f) => f.properties?.kind)).toEqual([
+			'aoi_vertex',
+			'aoi_vertex',
+			'aoi_vertex',
+			'aoi_vertex',
+		]);
 
 		const tableWritableHtml = renderToStaticMarkup(
 			<FeaturesCurationTable

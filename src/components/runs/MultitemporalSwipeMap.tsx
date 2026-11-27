@@ -30,6 +30,7 @@ import {
 } from '@/lib/geo/mapStyles';
 import {
 	bounds4674ToImageCoordinates,
+	buildSwipeAoiFeatureCollection,
 	SPECTRAL_MODE_ASSETS,
 	type SpectralCompositionMode,
 	type SwipeVisualMode,
@@ -69,7 +70,16 @@ const IMAGE_LAYER_ID = 'sicam-scene-raster-layer';
 const MASK_SOURCE_ID = 'sicam-delta-mask';
 const MASK_LAYER_ID = 'sicam-delta-mask-layer';
 const AOI_SOURCE_ID = 'sicam-case-aoi';
+const AOI_FILL_LAYER_ID = 'sicam-case-aoi-fill';
+const AOI_CASING_LAYER_ID = 'sicam-case-aoi-casing';
 const AOI_LINE_LAYER_ID = 'sicam-case-aoi-line';
+const AOI_VERTICES_LAYER_ID = 'sicam-case-aoi-vertices';
+const AOI_LAYER_IDS = [
+	AOI_FILL_LAYER_ID,
+	AOI_CASING_LAYER_ID,
+	AOI_LINE_LAYER_ID,
+	AOI_VERTICES_LAYER_ID,
+] as const;
 const FEATURES_SOURCE_ID = 'sicam-detected-features';
 const FEATURES_FILL_LAYER_ID = 'sicam-detected-features-fill';
 const FEATURES_LINE_LAYER_ID = 'sicam-detected-features-line';
@@ -184,6 +194,7 @@ function syncMapLayers(
 		maskRaster: LoadedRasterAsset | undefined;
 		showMask: boolean;
 		maskOpacity: number;
+		showAoiOverlay: boolean;
 		showVectors: boolean;
 		sceneResampling: 'linear' | 'nearest';
 		aoiCollection: FeatureCollection;
@@ -204,18 +215,21 @@ function syncMapLayers(
 			type: 'geojson',
 			data: params.aoiCollection,
 		});
-		map.addLayer({
-			id: AOI_LINE_LAYER_ID,
-			type: 'line',
-			source: AOI_SOURCE_ID,
-			paint: {
-				'line-color': '#38bdf8',
-				'line-width': 2,
-				'line-dasharray': [3, 2],
-			},
-		});
 	} else {
 		(map.getSource(AOI_SOURCE_ID) as GeoJSONSource).setData(params.aoiCollection);
+	}
+
+	if (!map.getLayer(AOI_FILL_LAYER_ID)) {
+		map.addLayer({
+			id: AOI_FILL_LAYER_ID,
+			type: 'fill',
+			source: AOI_SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'fill-color': '#10b981',
+				'fill-opacity': 0.22,
+			},
+		});
 	}
 
 	if (!map.getSource(FEATURES_SOURCE_ID)) {
@@ -249,6 +263,38 @@ function syncMapLayers(
 				],
 			},
 		});
+	} else {
+		(map.getSource(FEATURES_SOURCE_ID) as GeoJSONSource).setData(params.featuresCollection);
+	}
+
+	if (!map.getLayer(AOI_CASING_LAYER_ID)) {
+		map.addLayer({
+			id: AOI_CASING_LAYER_ID,
+			type: 'line',
+			source: AOI_SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'line-color': '#0f172a',
+				'line-width': 4.5,
+				'line-opacity': 0.85,
+			},
+		});
+	}
+
+	if (!map.getLayer(AOI_LINE_LAYER_ID)) {
+		map.addLayer({
+			id: AOI_LINE_LAYER_ID,
+			type: 'line',
+			source: AOI_SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'line-color': '#34d399',
+				'line-width': 2.5,
+			},
+		});
+	}
+
+	if (!map.getLayer(FEATURES_LINE_LAYER_ID)) {
 		map.addLayer({
 			id: FEATURES_LINE_LAYER_ID,
 			type: 'line',
@@ -280,8 +326,28 @@ function syncMapLayers(
 				],
 			},
 		});
-	} else {
-		(map.getSource(FEATURES_SOURCE_ID) as GeoJSONSource).setData(params.featuresCollection);
+	}
+
+	if (!map.getLayer(AOI_VERTICES_LAYER_ID)) {
+		map.addLayer({
+			id: AOI_VERTICES_LAYER_ID,
+			type: 'circle',
+			source: AOI_SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_vertex'],
+			paint: {
+				'circle-radius': 5,
+				'circle-color': '#ffffff',
+				'circle-stroke-width': 2.25,
+				'circle-stroke-color': '#0284c7',
+			},
+		});
+	}
+
+	const aoiVisibilityVal = params.showAoiOverlay ? 'visible' : 'none';
+	for (const layerId of AOI_LAYER_IDS) {
+		if (map.getLayer(layerId)) {
+			map.setLayoutProperty(layerId, 'visibility', aoiVisibilityVal);
+		}
 	}
 
 	const visibilityVal = params.showVectors ? 'visible' : 'none';
@@ -292,8 +358,8 @@ function syncMapLayers(
 		map.setLayoutProperty(FEATURES_LINE_LAYER_ID, 'visibility', visibilityVal);
 	}
 
-	// Posiciona tiles Wayback / rasters Sentinel-2 abaixo dos contornos vetoriais
-	syncWaybackTileLayer(map, params.waybackVintage, params.isHiResMode, AOI_LINE_LAYER_ID);
+	// Posiciona tiles Wayback / rasters Sentinel-2 abaixo de todas as camadas da AOI e feições
+	syncWaybackTileLayer(map, params.waybackVintage, params.isHiResMode, AOI_FILL_LAYER_ID);
 	syncImageRasterLayer(
 		map,
 		IMAGE_SOURCE_ID,
@@ -301,7 +367,7 @@ function syncMapLayers(
 		params.sceneRaster,
 		!params.isHiResMode,
 		1,
-		AOI_LINE_LAYER_ID,
+		AOI_FILL_LAYER_ID,
 		params.sceneResampling,
 	);
 	syncImageRasterLayer(
@@ -311,7 +377,7 @@ function syncMapLayers(
 		params.maskRaster,
 		params.showMask,
 		params.maskOpacity,
-		AOI_LINE_LAYER_ID,
+		AOI_FILL_LAYER_ID,
 		'nearest',
 	);
 	} catch {
@@ -352,6 +418,7 @@ export function MultitemporalSwipeMap({
 	const [visualMode, setVisualMode] = useState<SwipeVisualMode>('hires_wayback');
 	const [showMask, setShowMask] = useState(false);
 	const [maskOpacity, setMaskOpacity] = useState(0.55);
+	const [showAoiOverlay, setShowAoiOverlay] = useState(true);
 	const [showVectors, setShowVectors] = useState(true);
 	const [rasterResampling, setRasterResampling] = useState<'linear' | 'nearest'>('linear');
 	const [isOverZoomed, setIsOverZoomed] = useState(false);
@@ -363,12 +430,7 @@ export function MultitemporalSwipeMap({
 	onSelectFeatureRef.current = onSelectFeature;
 
 	const aoiCollection = useMemo<FeatureCollection>(
-		() => ({
-			type: 'FeatureCollection',
-			features: aoiGeoJson
-				? [{ type: 'Feature', properties: {}, geometry: aoiGeoJson }]
-				: [],
-		}),
+		() => buildSwipeAoiFeatureCollection(aoiGeoJson),
 		[aoiGeoJson],
 	);
 
@@ -427,6 +489,7 @@ export function MultitemporalSwipeMap({
 				maskRaster: undefined,
 				showMask: false,
 				maskOpacity,
+				showAoiOverlay,
 				showVectors,
 				sceneResampling: rasterResampling,
 				aoiCollection,
@@ -442,6 +505,7 @@ export function MultitemporalSwipeMap({
 				maskRaster,
 				showMask,
 				maskOpacity,
+				showAoiOverlay,
 				showVectors,
 				sceneResampling: rasterResampling,
 				aoiCollection,
@@ -725,6 +789,16 @@ export function MultitemporalSwipeMap({
 						<label className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-slate-700">
 							<input
 								type="checkbox"
+								checked={showAoiOverlay}
+								onChange={(event) => setShowAoiOverlay(event.target.checked)}
+								className="h-4 w-4 rounded border-slate-300 text-emerald-600"
+							/>
+							<span>Território Marcado (AOI)</span>
+						</label>
+
+						<label className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-slate-700">
+							<input
+								type="checkbox"
 								checked={showVectors}
 								onChange={(event) => setShowVectors(event.target.checked)}
 								className="h-4 w-4 rounded border-slate-300 text-brand-600"
@@ -947,6 +1021,9 @@ export function MultitemporalSwipeMap({
 					</div>
 
 					<div className="flex flex-wrap items-center gap-2 text-[11px]">
+						<span className="inline-flex items-center gap-1">
+							<span className="h-2.5 w-2.5 rounded-sm border border-emerald-500 bg-emerald-400/40" /> Território AOI
+						</span>
 						<span className="inline-flex items-center gap-1">
 							<span className="h-2.5 w-2.5 rounded-sm bg-red-500" /> Desmatamento
 						</span>
