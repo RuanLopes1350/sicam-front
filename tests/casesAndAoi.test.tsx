@@ -23,6 +23,7 @@ import {
 	parseGeoJsonPolygonInput,
 	resolveSirgas2000UtmZoneAndSrid,
 } from '@/lib/geo/aoiGeometry';
+import { buildAoiOverlayFeatureCollection } from '@/lib/geo/aoiDraftOverlay';
 import { buildBasemapStyle } from '@/lib/geo/mapStyles';
 import {
 	listTerritoryStates,
@@ -471,5 +472,49 @@ describe('WEB-04 — Geodésia AOI SIRGAS 2000, Territórios IBGE, Casos e MapLi
 			/>,
 		);
 		expect(overviewMapHtml).toContain('Distribuição Espacial das AOIs');
+	});
+
+	it('deve construir feições GeoJSON imediatas (linha elástica, aresta sólida e fechamento) ao desenhar AOI', () => {
+		const step1 = buildAoiOverlayFeatureCollection({
+			toolMode: 'polygon',
+			aoi: null,
+			isValidAoi: true,
+			municipalityBbox: null,
+			rectStart: null,
+			draftVertices: [[-60.12, -12.71]],
+			cursorCoord: [-60.118, -12.71],
+		});
+		expect(step1.features.some((f) => f.properties?.kind === 'draft_rubber_line')).toBe(true);
+		expect(step1.features.some((f) => f.properties?.kind === 'vertex')).toBe(true);
+
+		const step3 = buildAoiOverlayFeatureCollection({
+			toolMode: 'polygon',
+			aoi: null,
+			isValidAoi: true,
+			municipalityBbox: null,
+			rectStart: null,
+			draftVertices: [
+				[-60.12, -12.71],
+				[-60.118, -12.71],
+				[-60.118, -12.712],
+			],
+			cursorCoord: [-60.12, -12.712],
+		});
+		expect(step3.features.some((f) => f.properties?.kind === 'draft_fill')).toBe(true);
+		expect(step3.features.some((f) => f.properties?.kind === 'draft_solid_line')).toBe(true);
+		expect(step3.features.some((f) => f.properties?.kind === 'draft_rubber_line')).toBe(true);
+		expect(step3.features.some((f) => f.properties?.kind === 'first_vertex')).toBe(true);
+
+		const rectPreview = buildAoiOverlayFeatureCollection({
+			toolMode: 'rectangle',
+			aoi: null,
+			isValidAoi: true,
+			municipalityBbox: null,
+			rectStart: [-60.12, -12.71],
+			cursorCoord: [-60.115, -12.715],
+			draftVertices: [],
+		});
+		expect(rectPreview.features.some((f) => f.properties?.kind === 'aoi_polygon')).toBe(true);
+		expect(rectPreview.features.some((f) => f.properties?.kind === 'first_vertex')).toBe(true);
 	});
 });

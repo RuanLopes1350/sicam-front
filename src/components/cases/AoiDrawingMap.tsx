@@ -1,6 +1,6 @@
 'use client';
 
-import type { Feature, FeatureCollection } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 import {
 	Check,
 	FileCode2,
@@ -17,6 +17,10 @@ import { AlertBanner } from '@/components/ui/AlertBanner';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
+	type AoiOverlayToolMode,
+	buildAoiOverlayFeatureCollection,
+} from '@/lib/geo/aoiDraftOverlay';
+import {
 	buildClosedPolygonFromVertices,
 	buildRectanglePolygon,
 	computePolygonBbox,
@@ -31,7 +35,7 @@ import {
 import { cn } from '@/lib/utils/cn';
 import type { AoiPolygonGeoJson } from '@/types/api';
 
-export type DrawingToolMode = 'pan' | 'rectangle' | 'polygon';
+export type DrawingToolMode = AoiOverlayToolMode;
 
 export interface AoiDrawingMapProps {
 	aoi: AoiPolygonGeoJson | null;
@@ -44,88 +48,188 @@ export interface AoiDrawingMapProps {
 }
 
 const SOURCE_ID = 'sicam-aoi-draw-source';
+const CLOSE_SNAP_THRESHOLD_PX = 14;
 
 function installVectorOverlayLayers(
 	map: MapLibreMapInstance,
-	emptyData: FeatureCollection,
+	initialData: FeatureCollection,
 ): void {
-	if (map.getSource(SOURCE_ID)) {
-		return;
+	if (!map.getSource(SOURCE_ID)) {
+		map.addSource(SOURCE_ID, {
+			type: 'geojson',
+			data: initialData,
+		});
 	}
 
-	map.addSource(SOURCE_ID, {
-		type: 'geojson',
-		data: emptyData,
-	});
+	if (!map.getLayer('sicam-mun-bbox-outline')) {
+		map.addLayer({
+			id: 'sicam-mun-bbox-outline',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'mun_bbox'],
+			paint: {
+				'line-color': '#38bdf8',
+				'line-width': 1.75,
+				'line-dasharray': [3, 2],
+			},
+		});
+	}
 
-	map.addLayer({
-		id: 'sicam-mun-bbox-outline',
-		type: 'line',
-		source: SOURCE_ID,
-		filter: ['==', ['get', 'kind'], 'mun_bbox'],
-		paint: {
-			'line-color': '#38bdf8',
-			'line-width': 1.75,
-			'line-dasharray': [3, 2],
-		},
-	});
+	if (!map.getLayer('sicam-aoi-fill')) {
+		map.addLayer({
+			id: 'sicam-aoi-fill',
+			type: 'fill',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'fill-color': [
+					'case',
+					['boolean', ['get', 'valid'], true],
+					'#10b981',
+					'#ef4444',
+				],
+				'fill-opacity': 0.25,
+			},
+		});
+	}
 
-	map.addLayer({
-		id: 'sicam-aoi-fill',
-		type: 'fill',
-		source: SOURCE_ID,
-		filter: ['==', ['get', 'kind'], 'aoi_polygon'],
-		paint: {
-			'fill-color': [
-				'case',
-				['boolean', ['get', 'valid'], true],
-				'#10b981',
-				'#ef4444',
-			],
-			'fill-opacity': 0.25,
-		},
-	});
+	if (!map.getLayer('sicam-aoi-outline-casing')) {
+		map.addLayer({
+			id: 'sicam-aoi-outline-casing',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'line-color': '#0f172a',
+				'line-width': 4.5,
+				'line-opacity': 0.85,
+			},
+		});
+	}
 
-	map.addLayer({
-		id: 'sicam-aoi-outline',
-		type: 'line',
-		source: SOURCE_ID,
-		filter: ['==', ['get', 'kind'], 'aoi_polygon'],
-		paint: {
-			'line-color': [
-				'case',
-				['boolean', ['get', 'valid'], true],
-				'#34d399',
-				'#f87171',
-			],
-			'line-width': 2.5,
-		},
-	});
+	if (!map.getLayer('sicam-aoi-outline')) {
+		map.addLayer({
+			id: 'sicam-aoi-outline',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'aoi_polygon'],
+			paint: {
+				'line-color': [
+					'case',
+					['boolean', ['get', 'valid'], true],
+					'#34d399',
+					'#f87171',
+				],
+				'line-width': 2.5,
+			},
+		});
+	}
 
-	map.addLayer({
-		id: 'sicam-draft-line',
-		type: 'line',
-		source: SOURCE_ID,
-		filter: ['==', ['get', 'kind'], 'draft_line'],
-		paint: {
-			'line-color': '#fbbf24',
-			'line-width': 2,
-			'line-dasharray': [2, 2],
-		},
-	});
+	if (!map.getLayer('sicam-draft-fill')) {
+		map.addLayer({
+			id: 'sicam-draft-fill',
+			type: 'fill',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'draft_fill'],
+			paint: {
+				'fill-color': '#facc15',
+				'fill-opacity': 0.18,
+			},
+		});
+	}
 
-	map.addLayer({
-		id: 'sicam-vertex-points',
-		type: 'circle',
-		source: SOURCE_ID,
-		filter: ['==', ['get', 'kind'], 'vertex'],
-		paint: {
-			'circle-radius': 4.5,
-			'circle-color': '#ffffff',
-			'circle-stroke-width': 2,
-			'circle-stroke-color': '#0284c7',
-		},
-	});
+	if (!map.getLayer('sicam-draft-solid-casing')) {
+		map.addLayer({
+			id: 'sicam-draft-solid-casing',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'draft_solid_line'],
+			layout: {
+				'line-cap': 'round',
+				'line-join': 'round',
+			},
+			paint: {
+				'line-color': '#0f172a',
+				'line-width': 5,
+				'line-opacity': 0.85,
+			},
+		});
+	}
+
+	if (!map.getLayer('sicam-draft-solid-line')) {
+		map.addLayer({
+			id: 'sicam-draft-solid-line',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'draft_solid_line'],
+			layout: {
+				'line-cap': 'round',
+				'line-join': 'round',
+			},
+			paint: {
+				'line-color': '#facc15',
+				'line-width': 2.75,
+			},
+		});
+	}
+
+	if (!map.getLayer('sicam-draft-rubber-casing')) {
+		map.addLayer({
+			id: 'sicam-draft-rubber-casing',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'draft_rubber_line'],
+			paint: {
+				'line-color': '#0f172a',
+				'line-width': 4,
+				'line-opacity': 0.75,
+			},
+		});
+	}
+
+	if (!map.getLayer('sicam-draft-rubber-line')) {
+		map.addLayer({
+			id: 'sicam-draft-rubber-line',
+			type: 'line',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'draft_rubber_line'],
+			paint: {
+				'line-color': '#fde047',
+				'line-width': 2.25,
+				'line-dasharray': [2, 2],
+			},
+		});
+	}
+
+	if (!map.getLayer('sicam-vertex-points')) {
+		map.addLayer({
+			id: 'sicam-vertex-points',
+			type: 'circle',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'vertex'],
+			paint: {
+				'circle-radius': 5,
+				'circle-color': '#ffffff',
+				'circle-stroke-width': 2.25,
+				'circle-stroke-color': '#0284c7',
+			},
+		});
+	}
+
+	if (!map.getLayer('sicam-first-vertex-point')) {
+		map.addLayer({
+			id: 'sicam-first-vertex-point',
+			type: 'circle',
+			source: SOURCE_ID,
+			filter: ['==', ['get', 'kind'], 'first_vertex'],
+			paint: {
+				'circle-radius': 7,
+				'circle-color': '#facc15',
+				'circle-stroke-width': 2.5,
+				'circle-stroke-color': '#0f172a',
+			},
+		});
+	}
 }
 
 export function AoiDrawingMap({
@@ -139,118 +243,87 @@ export function AoiDrawingMap({
 }: AoiDrawingMapProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const mapRef = useRef<MapLibreMapInstance | null>(null);
+	const styleReadyRef = useRef(false);
+	const prevBasemapRef = useRef<BasemapVariant>('satellite');
 
 	const [basemap, setBasemap] = useState<BasemapVariant>('satellite');
-	const [toolMode, setToolMode] = useState<DrawingToolMode>('rectangle');
+	const [toolMode, setToolMode] = useState<DrawingToolMode>('polygon');
 	const [rectStart, setRectStart] = useState<[number, number] | null>(null);
 	const [draftVertices, setDraftVertices] = useState<[number, number][]>([]);
 	const [cursorCoord, setCursorCoord] = useState<[number, number] | null>(null);
 	const [webglError, setWebglError] = useState<string | null>(null);
 
-	// Refs espelhadas para handlers imperativos de eventos do MapLibre
 	const stateRef = useRef({
 		toolMode,
+		aoi,
+		isValidAoi,
+		municipalityBbox,
 		rectStart,
 		draftVertices,
+		cursorCoord,
 		onChangeAoi,
 	});
-	stateRef.current = { toolMode, rectStart, draftVertices, onChangeAoi };
+	stateRef.current = {
+		toolMode,
+		aoi,
+		isValidAoi,
+		municipalityBbox,
+		rectStart,
+		draftVertices,
+		cursorCoord,
+		onChangeAoi,
+	};
 
-	const buildOverlayGeoJson = useCallback((): FeatureCollection => {
-		const features: Feature[] = [];
-
-		if (municipalityBbox) {
-			const [minLon, minLat, maxLon, maxLat] = municipalityBbox;
-			features.push({
-				type: 'Feature',
-				properties: { kind: 'mun_bbox' },
-				geometry: {
-					type: 'Polygon',
-					coordinates: [
-						[
-							[minLon, minLat],
-							[maxLon, minLat],
-							[maxLon, maxLat],
-							[minLon, maxLat],
-							[minLon, minLat],
-						],
-					],
-				},
+	const buildOverlayGeoJson = useCallback(
+		(overrides?: Partial<{
+			toolMode: DrawingToolMode;
+			aoi: AoiPolygonGeoJson | null;
+			rectStart: [number, number] | null;
+			draftVertices: ReadonlyArray<[number, number]>;
+			cursorCoord: [number, number] | null;
+		}>): FeatureCollection => {
+			return buildAoiOverlayFeatureCollection({
+				toolMode: overrides?.toolMode ?? toolMode,
+				aoi: overrides && 'aoi' in overrides ? (overrides.aoi ?? null) : aoi,
+				isValidAoi,
+				municipalityBbox,
+				rectStart:
+					overrides && 'rectStart' in overrides ? (overrides.rectStart ?? null) : rectStart,
+				draftVertices: overrides?.draftVertices ?? draftVertices,
+				cursorCoord:
+					overrides && 'cursorCoord' in overrides
+						? (overrides.cursorCoord ?? null)
+						: cursorCoord,
 			});
-		}
-
-		// Quadrante em arrasto/segundo clique
-		const previewRect =
-			toolMode === 'rectangle' && rectStart && cursorCoord
-				? buildRectanglePolygon(rectStart, cursorCoord)
-				: null;
-
-		const activePolygon = previewRect ?? aoi;
-		if (activePolygon) {
-			features.push({
-				type: 'Feature',
-				properties: {
-					kind: 'aoi_polygon',
-					valid: previewRect ? true : isValidAoi,
-				},
-				geometry: activePolygon,
-			});
-
-			const ring = activePolygon.coordinates[0] ?? [];
-			for (let i = 0; i < Math.max(0, ring.length - 1); i++) {
-				const pt = ring[i];
-				if (pt) {
-					features.push({
-						type: 'Feature',
-						properties: { kind: 'vertex' },
-						geometry: { type: 'Point', coordinates: pt },
-					});
-				}
-			}
-		}
-
-		// Polígono livre em construção
-		if (toolMode === 'polygon' && draftVertices.length > 0) {
-			const linePts = cursorCoord ? [...draftVertices, cursorCoord] : [...draftVertices];
-			if (linePts.length >= 2) {
-				features.push({
-					type: 'Feature',
-					properties: { kind: 'draft_line' },
-					geometry: {
-						type: 'LineString',
-						coordinates: linePts,
-					},
-				});
-			}
-
-			for (const pt of draftVertices) {
-				features.push({
-					type: 'Feature',
-					properties: { kind: 'vertex' },
-					geometry: { type: 'Point', coordinates: pt },
-				});
-			}
-		}
-
-		if (toolMode === 'rectangle' && rectStart) {
-			features.push({
-				type: 'Feature',
-				properties: { kind: 'vertex' },
-				geometry: { type: 'Point', coordinates: rectStart },
-			});
-		}
-
-		return {
-			type: 'FeatureCollection',
-			features,
-		};
-	}, [aoi, cursorCoord, draftVertices, isValidAoi, municipalityBbox, rectStart, toolMode]);
+		},
+		[aoi, cursorCoord, draftVertices, isValidAoi, municipalityBbox, rectStart, toolMode],
+	);
 
 	const latestOverlayRef = useRef<FeatureCollection>({
 		type: 'FeatureCollection',
 		features: [],
 	});
 	latestOverlayRef.current = buildOverlayGeoJson();
+
+	const syncMapOverlayNow = useCallback(
+		(map: MapLibreMapInstance | null, collection: FeatureCollection) => {
+			latestOverlayRef.current = collection;
+			if (!map) return;
+			try {
+				if (!map.getSource(SOURCE_ID)) {
+					if (!styleReadyRef.current) {
+						return;
+					}
+					installVectorOverlayLayers(map, collection);
+				}
+				const src = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+				src?.setData(collection);
+			} catch {
+				// Estilo em transição: os eventos style.load/styledata reaplicam latestOverlayRef.current
+			}
+		},
+		[],
+	);
 
 	useEffect(() => {
 		if (!containerRef.current || typeof window === 'undefined') {
@@ -283,16 +356,65 @@ export function AoiDrawingMap({
 					'bottom-right',
 				);
 
-				instance.on('style.load', () => {
+				const ensureLayersAndSync = () => {
 					if (!instance) return;
-					installVectorOverlayLayers(instance, latestOverlayRef.current);
+					styleReadyRef.current = true;
+					try {
+						installVectorOverlayLayers(instance, latestOverlayRef.current);
+						const src = instance.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+						src?.setData(latestOverlayRef.current);
+					} catch {
+						// Aguarda conclusão da árvore de estilo caso chamada durante styledata inicial
+					}
+				};
+
+				instance.on('style.load', ensureLayersAndSync);
+				instance.on('load', ensureLayersAndSync);
+				instance.on('styledata', () => {
+					if (!instance || styleReadyRef.current) return;
+					if (instance.getStyle()) {
+						ensureLayersAndSync();
+					}
 				});
 
 				instance.on('mousemove', (event: MapMouseEvent) => {
-					setCursorCoord([
+					const pt: [number, number] = [
 						roundCoord(event.lngLat.lng),
 						roundCoord(event.lngLat.lat),
-					]);
+					];
+					const current = stateRef.current;
+
+					if (
+						current.toolMode === 'rectangle' &&
+						current.rectStart !== null
+					) {
+						const nextOverlay = buildAoiOverlayFeatureCollection({
+							toolMode: current.toolMode,
+							aoi: current.aoi,
+							isValidAoi: current.isValidAoi,
+							municipalityBbox: current.municipalityBbox,
+							rectStart: current.rectStart,
+							draftVertices: current.draftVertices,
+							cursorCoord: pt,
+						});
+						syncMapOverlayNow(instance, nextOverlay);
+					} else if (
+						current.toolMode === 'polygon' &&
+						current.draftVertices.length > 0
+					) {
+						const nextOverlay = buildAoiOverlayFeatureCollection({
+							toolMode: current.toolMode,
+							aoi: current.aoi,
+							isValidAoi: current.isValidAoi,
+							municipalityBbox: current.municipalityBbox,
+							rectStart: current.rectStart,
+							draftVertices: current.draftVertices,
+							cursorCoord: pt,
+						});
+						syncMapOverlayNow(instance, nextOverlay);
+					}
+
+					setCursorCoord(pt);
 				});
 
 				instance.on('click', (event: MapMouseEvent) => {
@@ -306,20 +428,86 @@ export function AoiDrawingMap({
 						if (!current.rectStart) {
 							setRectStart(pt);
 							current.onChangeAoi(null);
+							syncMapOverlayNow(
+								instance,
+								buildAoiOverlayFeatureCollection({
+									toolMode: 'rectangle',
+									aoi: null,
+									isValidAoi: true,
+									municipalityBbox: current.municipalityBbox,
+									rectStart: pt,
+									draftVertices: [],
+									cursorCoord: pt,
+								}),
+							);
 						} else {
 							const built = buildRectanglePolygon(current.rectStart, pt);
 							setRectStart(null);
 							if (built) {
 								current.onChangeAoi(built);
 								setToolMode('pan');
+								syncMapOverlayNow(
+									instance,
+									buildAoiOverlayFeatureCollection({
+										toolMode: 'pan',
+										aoi: built,
+										isValidAoi: true,
+										municipalityBbox: current.municipalityBbox,
+										rectStart: null,
+										draftVertices: [],
+										cursorCoord: pt,
+									}),
+								);
 							}
 						}
 						return;
 					}
 
 					if (current.toolMode === 'polygon') {
-						setDraftVertices((prev) => [...prev, pt]);
+						if (current.draftVertices.length >= 3 && instance) {
+							const firstProjected = instance.project(current.draftVertices[0]!);
+							const distPx = Math.hypot(
+								firstProjected.x - event.point.x,
+								firstProjected.y - event.point.y,
+							);
+							if (distPx <= CLOSE_SNAP_THRESHOLD_PX) {
+								const built = buildClosedPolygonFromVertices(current.draftVertices);
+								if (built) {
+									setDraftVertices([]);
+									current.onChangeAoi(built);
+									setToolMode('pan');
+									syncMapOverlayNow(
+										instance,
+										buildAoiOverlayFeatureCollection({
+											toolMode: 'pan',
+											aoi: built,
+											isValidAoi: true,
+											municipalityBbox: current.municipalityBbox,
+											rectStart: null,
+											draftVertices: [],
+											cursorCoord: pt,
+										}),
+									);
+									return;
+								}
+							}
+						}
+
+						const nextVertices = [...current.draftVertices, pt];
+						setDraftVertices(nextVertices);
 						current.onChangeAoi(null);
+						syncMapOverlayNow(
+							instance,
+							buildAoiOverlayFeatureCollection({
+								toolMode: 'polygon',
+								aoi: null,
+								isValidAoi: true,
+								municipalityBbox: current.municipalityBbox,
+								rectStart: null,
+								draftVertices: nextVertices,
+								cursorCoord: pt,
+							}),
+						);
 					}
 				});
 
@@ -332,6 +520,18 @@ export function AoiDrawingMap({
 							setDraftVertices([]);
 							current.onChangeAoi(built);
 							setToolMode('pan');
+							syncMapOverlayNow(
+								instance,
+								buildAoiOverlayFeatureCollection({
+									toolMode: 'pan',
+									aoi: built,
+									isValidAoi: true,
+									municipalityBbox: current.municipalityBbox,
+									rectStart: null,
+									draftVertices: [],
+									cursorCoord: current.cursorCoord,
+								}),
+							);
 						}
 					}
 				});
@@ -348,17 +548,23 @@ export function AoiDrawingMap({
 
 		return () => {
 			disposed = true;
+			styleReadyRef.current = false;
 			if (instance) {
 				instance.remove();
 				mapRef.current = null;
 			}
 		};
-	}, []);
+	}, [syncMapOverlayNow]);
 
-	// Sincroniza estilo base ao trocar satélite / OSM / offline
+	// Troca estilo base somente quando usuário alterna Satélite / OSM / Grade Offline
 	useEffect(() => {
+		if (prevBasemapRef.current === basemap) {
+			return;
+		}
+		prevBasemapRef.current = basemap;
 		const map = mapRef.current;
 		if (!map) return;
+		styleReadyRef.current = false;
 		map.setStyle(buildBasemapStyle(basemap));
 	}, [basemap]);
 
@@ -375,16 +581,11 @@ export function AoiDrawingMap({
 		}
 	}, [toolMode]);
 
-	// Atualiza fonte GeoJSON a cada movimento/clique
+	// Atualiza fonte GeoJSON reativamente sem depender de map.isStyleLoaded() (tiles raster externos podem estar pendentes)
 	useEffect(() => {
-		const map = mapRef.current;
-		if (!map || !map.isStyleLoaded()) {
-			return;
-		}
-		installVectorOverlayLayers(map, latestOverlayRef.current);
-		const src = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-		src?.setData(latestOverlayRef.current);
-	});
+		const nextCollection = buildOverlayGeoJson();
+		syncMapOverlayNow(mapRef.current, nextCollection);
+	}, [buildOverlayGeoJson, syncMapOverlayNow]);
 
 	// Enquadra município IBGE ou GeoJSON recém-importado
 	useEffect(() => {
@@ -566,7 +767,9 @@ export function AoiDrawingMap({
 									? 'Clique no canto oposto para concluir o quadrante'
 									: 'Clique no 1º canto do quadrante'
 								: toolMode === 'polygon'
-									? `Clique nos vértices (${draftVertices.length} adicionados; duplo clique fecha)`
+									? draftVertices.length >= 3
+										? `Clique nos vértices (${draftVertices.length} pts; clique no ponto inicial ou duplo clique para fechar)`
+										: `Clique nos vértices (${draftVertices.length} adicionados)`
 									: 'Arraste para mover ou use o scroll para zoom'}
 						</span>
 					</div>
