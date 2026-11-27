@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { RequireAuth } from '@/components/auth/RequireAuth';
+import { RunInspectionWorkbench } from '@/components/runs/RunInspectionWorkbench';
 import { RunProgressTracker } from '@/components/runs/RunProgressTracker';
-import { RunSummaryOverview } from '@/components/runs/RunSummaryOverview';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -208,7 +208,16 @@ function RunWorkspaceContent() {
 			) : null}
 
 			{showSummary ? (
-				<RunSummaryOverview run={runData} />
+				<RunInspectionWorkbench
+					run={runData}
+					aoiGeoJson={caseData?.aoiGeoJson ?? null}
+					userRole={user?.role ?? null}
+					onRunSummaryUpdated={(updatedSummary) =>
+						setRunData((prev) =>
+							prev ? { ...prev, summary: updatedSummary } : null,
+						)
+					}
+				/>
 			) : (
 				<RunProgressTracker
 					caseId={caseId}

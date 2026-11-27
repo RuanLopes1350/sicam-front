@@ -102,6 +102,21 @@ export type RunFeaturesGeoJsonResponse = Extract<
 >;
 
 export type DetectedFeatureItem = RunFeaturesJsonResponse['items'][number];
+export type DetectedFeatureGeoJson = RunFeaturesGeoJsonResponse['features'][number];
+export type FeatureClass = DetectedFeatureItem['featureClass'];
+export type FeatureReviewStatus = DetectedFeatureItem['reviewStatus'];
+export type RunRasterAssetType = RunRasterAssetItem['assetType'];
+export type RunAreaSummary = RunDetailResponse['summary'];
+
+export type RunFeaturesQuery = NonNullable<
+	paths['/api/v1/runs/{runId}/features']['get']['parameters']['query']
+>;
+
+export type ReviewFeatureBody =
+	paths['/api/v1/runs/{runId}/features/{featureId}/review']['patch']['requestBody']['content']['application/json'];
+
+export type ReviewFeatureResponse =
+	paths['/api/v1/runs/{runId}/features/{featureId}/review']['patch']['responses'][200]['content']['application/json'];
 
 export type ExportMetadataResponse =
 	paths['/api/v1/runs/{runId}/export']['get']['responses'][200]['content']['application/json'];

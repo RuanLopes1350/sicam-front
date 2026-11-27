@@ -16,6 +16,7 @@ import type { RunDetailResponse, RunPresetName, RunRasterAssetItem } from '@/typ
 
 export interface RunSummaryOverviewProps {
 	run: RunDetailResponse;
+	hideNextStepBanner?: boolean;
 }
 
 const RASTER_ASSET_LABELS: Record<RunRasterAssetItem['assetType'], string> = {
@@ -26,7 +27,10 @@ const RASTER_ASSET_LABELS: Record<RunRasterAssetItem['assetType'], string> = {
 	delta_ndvi_mask: 'Máscara Temática ΔNDVI + Nuvens SCL',
 };
 
-export function RunSummaryOverview({ run }: RunSummaryOverviewProps) {
+export function RunSummaryOverview({
+	run,
+	hideNextStepBanner = false,
+}: RunSummaryOverviewProps) {
 	const statusMeta = CASE_STATUS_META[run.status];
 	const presetLabel =
 		RUN_PRESET_LABELS[run.presetName as RunPresetName] ?? run.presetName;
@@ -234,11 +238,13 @@ export function RunSummaryOverview({ run }: RunSummaryOverviewProps) {
 				</Card>
 			</div>
 
-			<AlertBanner
-				variant="info"
-				title="Próxima etapa (WEB-07)"
-				message="A Mesa de Inspeção Multitemporal (cortina Before/After Swipe no MapLibre GL) e a Curadoria Auditável de feições serão habilitadas na etapa WEB-07."
-			/>
+			{!hideNextStepBanner ? (
+				<AlertBanner
+					variant="info"
+					title="Próxima etapa (WEB-07)"
+					message="A Mesa de Inspeção Multitemporal (cortina Before/After Swipe no MapLibre GL) e a Curadoria Auditável de feições serão habilitadas na etapa WEB-07."
+				/>
+			) : null}
 		</div>
 	);
 }
