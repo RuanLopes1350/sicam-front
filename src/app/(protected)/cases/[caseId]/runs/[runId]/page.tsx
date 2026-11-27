@@ -7,13 +7,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RunInspectionWorkbench } from '@/components/runs/RunInspectionWorkbench';
 import { RunProgressTracker } from '@/components/runs/RunProgressTracker';
+import { RunVersionSelectorBar } from '@/components/runs/RunVersionSelectorBar';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useAuth } from '@/hooks/useAuth';
-import { useRunEventsStream } from '@/hooks/useRunEventsStream';
+import {
+	type RunFailureInfo,
+	useRunEventsStream,
+} from '@/hooks/useRunEventsStream';
+import { useSystemCapabilities } from '@/hooks/useSystemCapabilities';
 import { type ApiProblemError, isApiProblemError } from '@/lib/api/problemDetails';
 import { CASE_STATUS_META, getCaseById } from '@/lib/cases/caseService';
 import { getRunById } from '@/lib/runs/runService';
@@ -26,6 +31,7 @@ function RunWorkspaceContent() {
 	const caseId = typeof params?.caseId === 'string' ? params.caseId : '';
 	const runId = typeof params?.runId === 'string' ? params.runId : '';
 	const { user } = useAuth();
+	const { capabilities } = useSystemCapabilities(Boolean(user));
 
 	const [caseData, setCaseData] = useState<CaseDetailResponse | null>(null);
 	const [runData, setRunData] = useState<RunDetailResponse | null>(null);
@@ -33,7 +39,8 @@ function RunWorkspaceContent() {
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [problem, setProblem] = useState<ApiProblemError | null>(null);
 	const [genericError, setGenericError] = useState<string | null>(null);
-	const [autoTransitioned, setAutoTransitioned] = useState(false);
+	const [autoTransitionMessage, setAutoTransitionMessage] = useState<string | null>(null);
+	const [exportFailureBanner, setExportFailureBanner] = useState<RunFailureInfo | null>(null);
 
 	const loadInitial = useCallback(async () => {
 		if (!caseId || !runId) {
@@ -62,12 +69,18 @@ function RunWorkspaceContent() {
 		}
 	}, [caseId, runId]);
 
-	const refreshRunOnly = useCallback(async () => {
+	const refreshRunAndCase = useCallback(async () => {
 		if (!runId) return;
 		setIsRefreshing(true);
 		try {
-			const fresh = await getRunById(runId);
-			setRunData(fresh);
+			const [freshCase, freshRun] = await Promise.all([
+				caseId ? getCaseById(caseId) : Promise.resolve(null),
+				getRunById(runId),
+			]);
+			if (freshCase) {
+				setCaseData(freshCase);
+			}
+			setRunData(freshRun);
 		} catch (err) {
 			if (isApiProblemError(err)) {
 				setProblem(err);
@@ -75,7 +88,7 @@ function RunWorkspaceContent() {
 		} finally {
 			setIsRefreshing(false);
 		}
-	}, [runId]);
+	}, [caseId, runId]);
 
 	useEffect(() => {
 		void loadInitial();
@@ -87,11 +100,22 @@ function RunWorkspaceContent() {
 		runId,
 		initialStatus: runData?.status ?? 'queued',
 		enabled: shouldStream,
-		onTerminalStatus: (finalStatus) => {
-			if (finalStatus === 'ready_for_review') {
-				setAutoTransitioned(true);
+		onTerminalStatus: (finalStatus, failure) => {
+			if (failure) {
+				setAutoTransitionMessage(null);
+				setExportFailureBanner(failure);
+			} else if (finalStatus === 'ready_for_review') {
+				setExportFailureBanner(null);
+				setAutoTransitionMessage(
+					'O motor científico concluiu o processamento na fila geo-analysis e realizou a transição automática para a visualização de resultados.',
+				);
+			} else if (finalStatus === 'frozen') {
+				setExportFailureBanner(null);
+				setAutoTransitionMessage(
+					'A emissão cartográfica (300 DPI + pacote .zip) foi concluída em tempo real e a versão foi congelada com selo FROZEN.',
+				);
 			}
-			void refreshRunOnly();
+			void refreshRunAndCase();
 		},
 	});
 
@@ -170,7 +194,7 @@ function RunWorkspaceContent() {
 					size="sm"
 					variant="outline"
 					isLoading={isRefreshing}
-					onClick={() => void refreshRunOnly()}
+					onClick={() => void refreshRunAndCase()}
 				>
 					<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
 					Atualizar Estado
@@ -199,11 +223,28 @@ function RunWorkspaceContent() {
 				</Card>
 			) : null}
 
-			{autoTransitioned ? (
+			{caseData ? (
+				<RunVersionSelectorBar
+					caseId={caseId}
+					runs={caseData.runs}
+					currentRunId={runData.id}
+					isAnalyst={user?.role === 'analyst'}
+				/>
+			) : null}
+
+			{autoTransitionMessage ? (
 				<AlertBanner
 					variant="success"
-					title="Análise concluída em tempo real"
-					message="O motor científico concluiu o processamento na fila geo-analysis e realizou a transição automática para a visualização de resultados."
+					title="Conclusão em tempo real"
+					message={autoTransitionMessage}
+				/>
+			) : null}
+
+			{exportFailureBanner ? (
+				<AlertBanner
+					variant="error"
+					title={`Falha na emissão (${exportFailureBanner.errorCode})`}
+					message={exportFailureBanner.message}
 				/>
 			) : null}
 
@@ -212,11 +253,20 @@ function RunWorkspaceContent() {
 					run={runData}
 					aoiGeoJson={caseData?.aoiGeoJson ?? null}
 					userRole={user?.role ?? null}
+					defaultPaperFormat={capabilities?.export.defaultPaperFormat ?? 'A3'}
+					supportedPaperFormats={capabilities?.export.supportedPaperFormats ?? ['A3', 'A4']}
 					onRunSummaryUpdated={(updatedSummary) =>
 						setRunData((prev) =>
 							prev ? { ...prev, summary: updatedSummary } : null,
 						)
 					}
+					onExportStarted={() => {
+						setAutoTransitionMessage(null);
+						setExportFailureBanner(null);
+						setRunData((prev) =>
+							prev ? { ...prev, status: 'exporting' } : null,
+						);
+					}}
 				/>
 			) : (
 				<RunProgressTracker

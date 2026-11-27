@@ -36,7 +36,10 @@ export interface UseRunEventsStreamOptions {
 	runId: string;
 	initialStatus: RunStatus;
 	enabled: boolean;
-	onTerminalStatus?: (finalStatus: 'ready_for_review' | 'frozen' | 'failed') => void;
+	onTerminalStatus?: (
+		finalStatus: 'ready_for_review' | 'frozen' | 'failed',
+		failure?: RunFailureInfo,
+	) => void;
 }
 
 const KNOWN_STATUSES = new Set<RunStatus>([
@@ -81,7 +84,9 @@ export function useRunEventsStream({
 		setStatus(initialStatus);
 		setProgressPct(defaults.progressPct);
 		setStepText(defaults.stepText);
-		if (isTerminalAnalysisStatus(initialStatus)) {
+		if (!isTerminalAnalysisStatus(initialStatus)) {
+			setFailureInfo(null);
+		} else {
 			setConnectionState(initialStatus === 'failed' ? 'error' : 'completed');
 		}
 	}, [initialStatus]);
@@ -180,8 +185,12 @@ export function useRunEventsStream({
 
 			if (ev.event === 'run.failed' || ev.event === 'export.failed') {
 				terminalReached = true;
+				const nextFailure: RunFailureInfo = {
+					errorCode: ev.data.errorCode,
+					message: ev.data.message,
+				};
 				setStatus(ev.data.status);
-				setFailureInfo({ errorCode: ev.data.errorCode, message: ev.data.message });
+				setFailureInfo(nextFailure);
 				setStepText(ev.data.message);
 				setConnectionState('error');
 				appendTimeline({
@@ -191,7 +200,7 @@ export function useRunEventsStream({
 					progressPct: 100,
 					message: ev.data.message,
 				});
-				onTerminalRef.current?.(ev.data.status);
+				onTerminalRef.current?.(ev.data.status, nextFailure);
 			}
 		};
 

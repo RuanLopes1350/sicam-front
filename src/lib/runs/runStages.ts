@@ -1,4 +1,4 @@
-import type { CreateRunBody, RunStatus } from '@/types/api';
+import type { CreateRunBody, PaperFormat, RunStatus } from '@/types/api';
 
 export interface AnalysisPipelineStep {
 	key: 'queued' | 'fetching_bands' | 'processing_ndvi' | 'vectorizing' | 'ready_for_review';
@@ -124,5 +124,58 @@ export function deriveIdempotencyFingerprint(
 		},
 		presetName: payload.presetName,
 		customParams: normalizedCustom,
+	});
+}
+
+export interface ExportPipelineStep {
+	key: 'queued_export' | 'vectors_manifest' | 'pdf_300dpi' | 'zip_freeze';
+	title: string;
+	minPct: number;
+	description: string;
+}
+
+export const EXPORT_PIPELINE_STEPS: readonly ExportPipelineStep[] = [
+	{
+		key: 'queued_export',
+		title: 'Fila Cartográfica',
+		minPct: 0,
+		description: 'Solicitação registrada e aguardando renderizador',
+	},
+	{
+		key: 'vectors_manifest',
+		title: 'Vetores & Manifesto',
+		minPct: 20,
+		description: 'Exportação CSV, GeoJSON, KML 2.2 e manifesto JSON',
+	},
+	{
+		key: 'pdf_300dpi',
+		title: 'Carta-Imagem 300 DPI',
+		minPct: 50,
+		description: 'Renderização A3/A4 offline com grade UTM e encarte IBGE',
+	},
+	{
+		key: 'zip_freeze',
+		title: 'Pacote .ZIP & Selo FROZEN',
+		minPct: 85,
+		description: 'Cadeia SHA-256, gravação S3 privada e congelamento imutável',
+	},
+] as const;
+
+export function resolveExportPipelineStepIndex(progressPct: number): number {
+	if (progressPct >= 85) return 3;
+	if (progressPct >= 50) return 2;
+	if (progressPct >= 20) return 1;
+	return 0;
+}
+
+export function deriveExportIdempotencyFingerprint(
+	runId: string,
+	paperFormat: PaperFormat,
+	observations: string,
+): string {
+	return JSON.stringify({
+		runId,
+		paperFormat,
+		observations: observations.trim(),
 	});
 }

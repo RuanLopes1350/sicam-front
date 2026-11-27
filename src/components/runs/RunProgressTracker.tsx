@@ -21,7 +21,9 @@ import type {
 import type { ApiProblemError } from '@/lib/api/problemDetails';
 import {
 	ANALYSIS_PIPELINE_STEPS,
+	EXPORT_PIPELINE_STEPS,
 	isTerminalAnalysisStatus,
+	resolveExportPipelineStepIndex,
 	resolvePipelineStepIndex,
 } from '@/lib/runs/runStages';
 import { cn } from '@/lib/utils/cn';
@@ -70,7 +72,9 @@ export function RunProgressTracker({
 	canRetryNewRun = false,
 }: RunProgressTrackerProps) {
 	const clampedPct = Math.max(0, Math.min(100, Math.round(progressPct)));
+	const isExporting = status === 'exporting';
 	const activeIdx = resolvePipelineStepIndex(status);
+	const activeExportIdx = resolveExportPipelineStepIndex(clampedPct);
 	const isFailed = status === 'failed';
 	const badgeInfo = CONNECTION_BADGE[connectionState];
 
@@ -80,10 +84,14 @@ export function RunProgressTracker({
 				<div className="space-y-1">
 					<CardTitle className="flex items-center gap-2">
 						<Activity className="h-4 w-4 text-brand-600" aria-hidden="true" />
-						Pipeline Analítico em Tempo Real — Versão v{runVersion}
+						{isExporting
+							? `Emissão Cartográfica 300 DPI em Tempo Real — Versão v${runVersion}`
+							: `Pipeline Analítico em Tempo Real — Versão v${runVersion}`}
 					</CardTitle>
 					<CardDescription>
-						Streaming seguro (Bearer SSE) dos eventos da fila geo-analysis e transição automática ao concluir.
+						{isExporting
+							? 'Streaming seguro (Bearer SSE) da fila cartography-export até geração do PDF 300 DPI, pacote .zip e selo FROZEN.'
+							: 'Streaming seguro (Bearer SSE) dos eventos da fila geo-analysis e transição automática ao concluir.'}
 					</CardDescription>
 				</div>
 
@@ -165,62 +173,111 @@ export function RunProgressTracker({
 					</div>
 				</div>
 
-				<ol className="grid grid-cols-1 gap-3 md:grid-cols-5">
-					{ANALYSIS_PIPELINE_STEPS.map((step, index) => {
-						const completed =
-							!isFailed &&
-							(activeIdx > index ||
-								(activeIdx === 4 && index === 4 && isTerminalAnalysisStatus(status)));
-						const active = !isFailed && activeIdx === index && !completed;
+				{isExporting ? (
+					<ol className="grid grid-cols-1 gap-3 md:grid-cols-4">
+						{EXPORT_PIPELINE_STEPS.map((step, index) => {
+							const completed = activeExportIdx > index;
+							const active = activeExportIdx === index;
 
-						return (
-							<li
-								key={step.key}
-								className={cn(
-									'flex flex-col justify-between rounded-xl border p-3 text-xs transition-colors',
-									completed
-										? 'border-emerald-200 bg-emerald-50/70'
-										: active
-											? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-200'
-											: isFailed
-												? 'border-red-200 bg-red-50/40'
+							return (
+								<li
+									key={step.key}
+									className={cn(
+										'flex flex-col justify-between rounded-xl border p-3 text-xs transition-colors',
+										completed
+											? 'border-emerald-200 bg-emerald-50/70'
+											: active
+												? 'border-indigo-500 bg-indigo-50/70 ring-1 ring-indigo-200'
 												: 'border-slate-200 bg-white',
-								)}
-							>
-								<div className="flex items-start justify-between gap-2">
-									<span className="font-mono text-[11px] font-semibold text-slate-500">
-										Etapa {index + 1}
-									</span>
-									{completed ? (
-										<CheckCircle2
-											className="h-4 w-4 shrink-0 text-emerald-600"
-											aria-hidden="true"
-										/>
-									) : active ? (
-										<Spinner size="sm" />
-									) : isFailed ? (
-										<XCircle
-											className="h-4 w-4 shrink-0 text-red-500"
-											aria-hidden="true"
-										/>
-									) : (
-										<Clock
-											className="h-4 w-4 shrink-0 text-slate-400"
-											aria-hidden="true"
-										/>
 									)}
-								</div>
+								>
+									<div className="flex items-start justify-between gap-2">
+										<span className="font-mono text-[11px] font-semibold text-slate-500">
+											Emissão {index + 1}
+										</span>
+										{completed ? (
+											<CheckCircle2
+												className="h-4 w-4 shrink-0 text-emerald-600"
+												aria-hidden="true"
+											/>
+										) : active ? (
+											<Spinner size="sm" />
+										) : (
+											<Clock
+												className="h-4 w-4 shrink-0 text-slate-400"
+												aria-hidden="true"
+											/>
+										)}
+									</div>
 
-								<div className="mt-2 space-y-1">
-									<p className="font-semibold text-slate-900">{step.title}</p>
-									<p className="text-[11px] leading-snug text-slate-600">
-										{step.description}
-									</p>
-								</div>
-							</li>
-						);
-					})}
-				</ol>
+									<div className="mt-2 space-y-1">
+										<p className="font-semibold text-slate-900">{step.title}</p>
+										<p className="text-[11px] leading-snug text-slate-600">
+											{step.description}
+										</p>
+									</div>
+								</li>
+							);
+						})}
+					</ol>
+				) : (
+					<ol className="grid grid-cols-1 gap-3 md:grid-cols-5">
+						{ANALYSIS_PIPELINE_STEPS.map((step, index) => {
+							const completed =
+								!isFailed &&
+								(activeIdx > index ||
+									(activeIdx === 4 && index === 4 && isTerminalAnalysisStatus(status)));
+							const active = !isFailed && activeIdx === index && !completed;
+
+							return (
+								<li
+									key={step.key}
+									className={cn(
+										'flex flex-col justify-between rounded-xl border p-3 text-xs transition-colors',
+										completed
+											? 'border-emerald-200 bg-emerald-50/70'
+											: active
+												? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-200'
+												: isFailed
+													? 'border-red-200 bg-red-50/40'
+													: 'border-slate-200 bg-white',
+									)}
+								>
+									<div className="flex items-start justify-between gap-2">
+										<span className="font-mono text-[11px] font-semibold text-slate-500">
+											Etapa {index + 1}
+										</span>
+										{completed ? (
+											<CheckCircle2
+												className="h-4 w-4 shrink-0 text-emerald-600"
+												aria-hidden="true"
+											/>
+										) : active ? (
+											<Spinner size="sm" />
+										) : isFailed ? (
+											<XCircle
+												className="h-4 w-4 shrink-0 text-red-500"
+												aria-hidden="true"
+											/>
+										) : (
+											<Clock
+												className="h-4 w-4 shrink-0 text-slate-400"
+												aria-hidden="true"
+											/>
+										)}
+									</div>
+
+									<div className="mt-2 space-y-1">
+										<p className="font-semibold text-slate-900">{step.title}</p>
+										<p className="text-[11px] leading-snug text-slate-600">
+											{step.description}
+										</p>
+									</div>
+								</li>
+							);
+						})}
+					</ol>
+				)}
 
 				{timeline.length > 0 ? (
 					<div className="space-y-2">

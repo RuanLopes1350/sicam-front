@@ -121,6 +121,20 @@ export type ReviewFeatureResponse =
 export type ExportMetadataResponse =
 	paths['/api/v1/runs/{runId}/export']['get']['responses'][200]['content']['application/json'];
 
+export type RequestExportBody =
+	paths['/api/v1/runs/{runId}/export']['post']['requestBody']['content']['application/json'];
+
+export type PaperFormat = NonNullable<RequestExportBody['paperFormat']>;
+
+export type RequestExportAcceptedResponse =
+	paths['/api/v1/runs/{runId}/export']['post']['responses'][202]['content']['application/json'];
+
+export type ExportArtifactType = NonNullable<
+	NonNullable<
+		paths['/api/v1/exports/{exportId}/download']['get']['parameters']['query']
+	>['artifact']
+>;
+
 export type IntegrityVerifyResponse =
 	paths['/api/v1/integrity/verify']['post']['responses'][200]['content']['application/json'];
 

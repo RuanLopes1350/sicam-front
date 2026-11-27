@@ -1,11 +1,16 @@
 'use client';
 
+import { FileOutput } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DismissFeatureModal } from '@/components/runs/DismissFeatureModal';
 import { FeaturesCurationTable } from '@/components/runs/FeaturesCurationTable';
+import { FrozenExportCustodyCard } from '@/components/runs/FrozenExportCustodyCard';
 import { MultitemporalSwipeMap } from '@/components/runs/MultitemporalSwipeMap';
+import { RequestExportModal } from '@/components/runs/RequestExportModal';
 import { RunSummaryOverview } from '@/components/runs/RunSummaryOverview';
 import { AlertBanner } from '@/components/ui/AlertBanner';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useRunRasters } from '@/hooks/useRunRasters';
 import { type ApiProblemError, isApiProblemError } from '@/lib/api/problemDetails';
@@ -15,6 +20,7 @@ import type {
 	AoiPolygonGeoJson,
 	DetectedFeatureGeoJson,
 	OperatorRole,
+	PaperFormat,
 	RunAreaSummary,
 	RunDetailResponse,
 } from '@/types/api';
@@ -23,14 +29,20 @@ export interface RunInspectionWorkbenchProps {
 	run: RunDetailResponse;
 	aoiGeoJson: AoiPolygonGeoJson | null;
 	userRole: OperatorRole | null;
+	defaultPaperFormat?: PaperFormat;
+	supportedPaperFormats?: readonly PaperFormat[];
 	onRunSummaryUpdated: (summary: RunAreaSummary) => void;
+	onExportStarted?: () => void;
 }
 
 export function RunInspectionWorkbench({
 	run,
 	aoiGeoJson,
 	userRole,
+	defaultPaperFormat = 'A3',
+	supportedPaperFormats = ['A3', 'A4'],
 	onRunSummaryUpdated,
+	onExportStarted,
 }: RunInspectionWorkbenchProps) {
 	const [features, setFeatures] = useState<DetectedFeatureGeoJson[]>([]);
 	const [isLoadingFeatures, setIsLoadingFeatures] = useState(true);
@@ -47,6 +59,7 @@ export function RunInspectionWorkbench({
 	const [dismissTarget, setDismissTarget] = useState<DetectedFeatureGeoJson | null>(null);
 	const [reviewProblem, setReviewProblem] = useState<ApiProblemError | null>(null);
 	const [reviewSuccessMessage, setReviewSuccessMessage] = useState<string | null>(null);
+	const [exportModalOpen, setExportModalOpen] = useState(false);
 
 	const { rasters, isLoadingRasters, rasterError } = useRunRasters(
 		run.id,
@@ -224,10 +237,51 @@ export function RunInspectionWorkbench({
 				onConfirmDismiss={(fid, reason) => void handleConfirmDismiss(fid, reason)}
 			/>
 
-			<AlertBanner
-				variant="info"
-				title="Próxima etapa (WEB-08)"
-				message="A emissão da Carta-Imagem oficial (A4/A3 a 300 DPI), o download do Pacote Técnico (.zip), o selo de congelamento FROZEN e o comparador de versões v1..vN serão habilitados na etapa WEB-08."
+			{run.status === 'frozen' ? (
+				<FrozenExportCustodyCard runId={run.id} />
+			) : run.status === 'ready_for_review' && userRole === 'analyst' ? (
+				<Card className="border-brand-200 bg-brand-50/30">
+					<CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+						<div className="space-y-1">
+							<CardTitle className="flex items-center gap-2">
+								<FileOutput className="h-4 w-4 text-brand-700" aria-hidden="true" />
+								Emissão Oficial da Carta-Imagem &amp; Pacote Técnico
+							</CardTitle>
+							<CardDescription>
+								{run.summary.activeFeatureCount} feição(ões) ativa(s) e{' '}
+								{run.summary.dismissedFeatureCount} descartada(s). A emissão gera o PDF 300 DPI + pacote .zip e congela permanentemente esta versão.
+							</CardDescription>
+						</div>
+
+						<Button variant="primary" onClick={() => setExportModalOpen(true)}>
+							<FileOutput className="h-4 w-4" aria-hidden="true" />
+							Emitir Carta-Imagem (A3/A4) &amp; Congelar Versão
+						</Button>
+					</CardHeader>
+					<CardContent className="pt-0 text-xs text-slate-600">
+						Revise todos os polígonos no comparador acima antes de emitir o pacote final com selo criptográfico SHA-256.
+					</CardContent>
+				</Card>
+			) : (
+				<AlertBanner
+					variant="info"
+					title="Aguardando emissão cartográfica"
+					message="Esta versão encontra-se em revisão (ready_for_review) e aguarda solicitação de emissão oficial por um operador Analista."
+				/>
+			)}
+
+			<RequestExportModal
+				open={exportModalOpen}
+				runId={run.id}
+				runVersion={run.version}
+				activeFeatureCount={run.summary.activeFeatureCount}
+				dismissedFeatureCount={run.summary.dismissedFeatureCount}
+				defaultPaperFormat={defaultPaperFormat}
+				supportedPaperFormats={supportedPaperFormats}
+				onClose={() => setExportModalOpen(false)}
+				onExportRequested={() => {
+					onExportStarted?.();
+				}}
 			/>
 		</div>
 	);
